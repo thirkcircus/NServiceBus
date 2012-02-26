@@ -12,12 +12,12 @@ namespace NServiceBus.Hosting.Windows
         /// <summary>
         /// Command line arguments.
         /// </summary>
-        public static string[] Args;
+        public string[] Args { get; set; }
 
         /// <summary>
         /// The name of this endpoint
         /// </summary>
-        public static string EndpointName { get; set; }
+        public string EndpointName { get; set; }
 
         /// <summary>
         /// Returns an instance of <see cref="GenericHost"/>

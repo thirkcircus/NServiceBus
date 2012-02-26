@@ -21,11 +21,11 @@
         {
             // Create the new appdomain with the new config.
             var installDomain = AppDomain.CreateDomain("installDomain", AppDomain.CurrentDomain.Evidence, new AppDomainSetup
-                                                                                                              {
-                                                                                                                  ConfigurationFile = configFile,
-                                                                                                                  AppDomainInitializer = DomainInitializer,
-                                                                                                                  AppDomainInitializerArguments = new[]{string.Join(";",args),endpointConfig.AssemblyQualifiedName,endpointName, runOtherInstallers.ToString(), runInfrastructureInstallers.ToString()}
-                                                                                                              });
+            {
+                ConfigurationFile = configFile,
+                AppDomainInitializer = DomainInitializer,
+                AppDomainInitializerArguments = new[] { string.Join(";", args), endpointConfig.AssemblyQualifiedName, endpointName, runOtherInstallers.ToString(), runInfrastructureInstallers.ToString() }
+            });
 
             // Call the right config method in that appdomain.
             var del = new CrossAppDomainDelegate(RunInstall);
@@ -41,15 +41,15 @@
             Console.WriteLine("Executing the NServiceBus installers");
 
             try
-            {   
+            {
                 host.Install();
             }
             catch (Exception ex)
             {
                 //need to suppress here in order to avoid infinite loop
-                Console.WriteLine("Failed to execute installers: " +ex);  
+                Console.WriteLine("Failed to execute installers: " + ex);
             }
-           
+
 
         }
 
@@ -57,7 +57,7 @@
         {
             Console.WriteLine("Initializing the installer in the Install AppDomain");
 
-            host = new WindowsHost( Type.GetType(args[1],true), args[0].Split(';').ToArray(), args[2], bool.Parse(args[3]), bool.Parse(args[4]));
+            host = new WindowsHost(Type.GetType(args[1], true), args[0].Split(';').ToArray(), args[2], bool.Parse(args[3]), bool.Parse(args[4]));
         }
 
         static WindowsHost host;

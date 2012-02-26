@@ -5,10 +5,10 @@ using System.Linq;
 using System.Reflection;
 using NServiceBus.Hosting.Helpers;
 using NServiceBus.Hosting.Windows.Arguments;
+using NServiceBus.Hosting.Windows.Conventions;
 using Topshelf;
 using Topshelf.Configuration;
 using System.Configuration;
-using Topshelf.Internal;
 
 namespace NServiceBus.Hosting.Windows
 {
@@ -23,8 +23,7 @@ namespace NServiceBus.Hosting.Windows
     {
         static void Main(string[] args)
         {
-            Parser.Args commandLineArguments = Parser.ParseArgs(args);
-            var arguments = new HostArguments(commandLineArguments);
+            var arguments = new HostArguments(args);
 
             if (arguments.Help != null)
             {
@@ -33,93 +32,107 @@ namespace NServiceBus.Hosting.Windows
                 return;
             }
 
-            var endpointConfigurationType = GetEndpointConfigurationType(arguments);
-
-            if (endpointConfigurationType == null)
+            var hostDefinition = DefineSingleEndpointHost(arguments);
+            
+            if (hostDefinition == null)
             {
-                if (arguments.InstallInfrastructure == null)
-                    throw new InvalidOperationException("No endpoint configuration found in scanned assemblies. " +
-                        "This usually happens when NServiceBus fails to load your assembly containing IConfigureThisEndpoint." +
-                        " Try specifying the type explicitly in the NServiceBus.Host.exe.config using the appsetting key: EndpointConfigurationType, " +
-                        "Scanned path: " + AppDomain.CurrentDomain.BaseDirectory);
-                
-                Console.WriteLine("Running infrastructure installers and exiting (ignoring other command line parameters if exist).");
-                InstallInfrastructure();
-                return;
+                if (arguments.InstallInfrastructure != null)
+                {
+                    Console.WriteLine("Running infrastructure installers and exiting (ignoring other command line parameters if exist).");
+                    InstallInfrastructure();
+
+                    return;
+                }
+
+                throw new InvalidOperationException("No endpoint configuration found in scanned assemblies. " +
+                            "This usually happens when NServiceBus fails to load your assembly containing IConfigureThisEndpoint." +
+                            " Try specifying the type explicitly in the NServiceBus.Host.exe.config using the appsetting key: EndpointConfigurationType, " +
+                            "Scanned path: " + AppDomain.CurrentDomain.BaseDirectory);
             }
 
-            AssertThatEndpointConfigurationTypeHasDefaultConstructor(endpointConfigurationType);
-            string endpointConfigurationFile = GetEndpointConfigurationFile(endpointConfigurationType);
-
-            var endpointName = GetEndpointName(endpointConfigurationType, arguments);
-            var endpointVersion = GetEndpointVersion(endpointConfigurationType);
-
-            var serviceName = endpointName;
-
             if (arguments.ServiceName != null)
-                serviceName = arguments.ServiceName.Value;
-
-            var displayName = serviceName + "-" + endpointVersion;
+                hostDefinition.ServiceName = arguments.ServiceName.Value;
 
             if (arguments.SideBySide != null)
             {
-                serviceName += "-" + endpointVersion;
+                hostDefinition.ServiceName += "-" + hostDefinition.Version;
 
-                displayName += " (SideBySide)";
+                hostDefinition.DisplayName += " (SideBySide)";
             }
 
+            if ((arguments.Install) || (arguments.InstallInfrastructure != null))
+            {
+                AppDomain.CurrentDomain.SetupInformation.AppDomainInitializerArguments = arguments.CommandLineArgs;
+                RunInstallersForHostEndpoints(hostDefinition, arguments);
+            }
+
+            var cfg = RunnerConfigurator.New(x =>
+            {
+                foreach (var endpoint in hostDefinition.Endpoints)
+                {
+                    ConfigureEndpointService(x, endpoint, arguments.CommandLineArgs);                    
+                }
+
+                if (arguments.Username != null && arguments.Password != null)
+                {
+                    x.RunAs(arguments.Username.Value, arguments.Password.Value);
+                }
+                else
+                {
+                    x.RunAsLocalSystem();
+                }
+
+                if (arguments.StartManually != null)
+                {
+                    x.DoNotStartAutomatically();
+                }
+
+                x.SetDisplayName(arguments.DisplayName != null ? arguments.DisplayName.Value : hostDefinition.DisplayName);
+                x.SetServiceName(hostDefinition.ServiceName);
+                x.SetDescription(arguments.Description != null ? arguments.Description.Value : "NServiceBus Message Endpoint Host Service for " + hostDefinition.DisplayName);
+
+                var serviceCommandLine = arguments.Args.CustomArguments.AsCommandLine();
+                serviceCommandLine += " /serviceName:\"" + hostDefinition.ServiceName + "\"";
+                //serviceCommandLine += " /endpointName:\"" + endpointName + "\"";
+
+                x.SetServiceCommandLine(serviceCommandLine);
+
+                if (arguments.DependsOn == null)
+                    x.DependencyOnMsmq();
+                else
+                    foreach (var dependency in arguments.DependsOn.Value.Split(','))
+                        x.DependsOn(dependency);
+            });
+
+            Runner.Host(cfg, arguments.CommandLineArgs);
+        }
+
+        static void RunInstallersForHostEndpoints(HostDefinition host, HostArguments arguments)
+        {
+            foreach (var endpointDefinition in host.Endpoints)
+            {
+                WindowsInstaller.Install(arguments.CommandLineArgs,
+                    endpointDefinition.ConfigurationType,
+                    endpointDefinition.Name,
+                    endpointDefinition.ConfigurationFile,
+                    arguments.Install,
+                    arguments.InstallInfrastructure != null);
+            }
+        }
+
+        static void ConfigureEndpointService(IRunnerConfigurator config, EndpointInfo endpoint, string[] args)
+        {
             //add the endpoint name so that the new appdomain can get it
-            args = args.Concat(new[] { endpointName }).ToArray();
-            
-            AppDomain.CurrentDomain.SetupInformation.AppDomainInitializerArguments = args;
-            if ((commandLineArguments.Install) || (arguments.InstallInfrastructure != null))
-                WindowsInstaller.Install(args, endpointConfigurationType, endpointName, endpointConfigurationFile, 
-                    commandLineArguments.Install, arguments.InstallInfrastructure != null);
-                    
+            var endpointArgs = args.Concat(new[] { endpoint.Name }).ToArray();
 
-            IRunConfiguration cfg = RunnerConfigurator.New(x =>
-                                                               {
-                                                                   x.ConfigureServiceInIsolation<WindowsHost>(endpointConfigurationType.AssemblyQualifiedName, c =>
-                                                                                                                                                                   {
-                                                                                                                                                                       c.ConfigurationFile(endpointConfigurationFile);
-                                                                                                                                                                       c.CommandLineArguments(args, () => SetHostServiceLocatorArgs);
-                                                                                                                                                                       c.WhenStarted(service => service.Start());
-                                                                                                                                                                       c.WhenStopped(service => service.Stop());
-                                                                                                                                                                       c.CreateServiceLocator(() => new HostServiceLocator());
-                                                                                                                                                                   });
-
-                                                                   if (arguments.Username != null && arguments.Password != null)
-                                                                   {
-                                                                       x.RunAs(arguments.Username.Value, arguments.Password.Value);
-                                                                   }
-                                                                   else
-                                                                   {
-                                                                       x.RunAsLocalSystem();
-                                                                   }
-
-                                                                   if (arguments.StartManually != null)
-                                                                   {
-                                                                       x.DoNotStartAutomatically();
-                                                                   }
-
-                                                                   x.SetDisplayName(arguments.DisplayName != null ? arguments.DisplayName.Value : displayName);
-                                                                   x.SetServiceName(serviceName);
-                                                                   x.SetDescription(arguments.Description != null ? arguments.Description.Value : "NServiceBus Message Endpoint Host Service for " + displayName);
-
-                                                                   var serviceCommandLine = commandLineArguments.CustomArguments.AsCommandLine();
-                                                                   serviceCommandLine += " /serviceName:\"" + serviceName + "\"";
-                                                                   serviceCommandLine += " /endpointName:\"" + endpointName + "\"";
-
-                                                                   x.SetServiceCommandLine(serviceCommandLine);
-
-                                                                   if (arguments.DependsOn == null)
-                                                                       x.DependencyOnMsmq();
-                                                                   else
-                                                                       foreach (var dependency in arguments.DependsOn.Value.Split(','))
-                                                                           x.DependsOn(dependency);
-                                                               });
-
-            Runner.Host(cfg, args);
+            config.ConfigureServiceInIsolation<WindowsHost>(endpoint.ConfigurationType.AssemblyQualifiedName, c =>
+            {
+                c.ConfigurationFile(endpoint.ConfigurationFile);
+                c.CommandLineArguments(endpointArgs, () => SetHostServiceLocatorArgs);
+                c.WhenStarted(service => service.Start());
+                c.WhenStopped(service => service.Stop());
+                c.CreateServiceLocator(() => new HostServiceLocator { Args = args, EndpointName = endpoint.Name });
+            });
         }
 
         static void InstallInfrastructure()
@@ -130,7 +143,42 @@ namespace NServiceBus.Hosting.Windows
             installer.InstallInfrastructureInstallers();
         }
 
-        static string GetEndpointVersion(Type endpointConfigurationType)
+        static HostDefinition DefineSingleEndpointHost(HostArguments arguments)
+        {
+            var endpointConfigurationType = GetEndpointConfigurationType(arguments);
+
+            if (endpointConfigurationType == null)
+                return null;
+
+            AssertThatEndpointConfigurationTypeHasDefaultConstructor(endpointConfigurationType);
+
+            var endpointName = EndpointDefinitionConventions.GetEndpointName(endpointConfigurationType, arguments);
+
+            var endpointConfigurationFile = GetEndpointConfigurationFile(endpointConfigurationType);
+            var endpointVersion = GetVersionFromEndpointConfigurationType(endpointConfigurationType);
+
+            var serviceName = endpointName;
+            var displayName = serviceName + "-" + endpointVersion;
+
+            var endpoint = new EndpointInfo
+            {
+                Name = endpointName,
+                ConfigurationType = endpointConfigurationType,
+                ConfigurationFile = endpointConfigurationFile
+            };
+
+            var host = new HostDefinition
+            {
+                ServiceName = endpointName,
+                DisplayName = displayName,
+                Version = endpointVersion,
+                Endpoints = new[] { endpoint }
+            };
+
+            return host;
+        }
+
+        static string GetVersionFromEndpointConfigurationType(Type endpointConfigurationType)
         {
             var fileVersion = FileVersionInfo.GetVersionInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, endpointConfigurationType.Assembly.ManifestModule.Name));
 
@@ -159,8 +207,6 @@ namespace NServiceBus.Hosting.Windows
 
         static void SetHostServiceLocatorArgs(string[] args)
         {
-            HostServiceLocator.Args = args;
-            HostServiceLocator.EndpointName = args.Last();
         }
 
         static void AssertThatEndpointConfigurationTypeHasDefaultConstructor(Type type)
@@ -176,32 +222,7 @@ namespace NServiceBus.Hosting.Windows
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, endpointConfigurationType.Assembly.ManifestModule.Name + ".config");
         }
 
-        /// <summary>
-        /// Gives a string which serves to identify the endpoint.
-        /// </summary>
-        /// <param name="endpointConfigurationType"></param>
-        /// <param name="arguments"> </param>
-        /// <returns></returns>
-        static string GetEndpointName(Type endpointConfigurationType, HostArguments arguments)
-        {
-            var endpointConfiguration = Activator.CreateInstance(endpointConfigurationType);
-            var endpointName = endpointConfiguration.GetType().Namespace;
-            
-            if (arguments.ServiceName != null)
-                endpointName = arguments.ServiceName.Value;
-
-            var arr = endpointConfiguration.GetType().GetCustomAttributes(typeof(EndpointNameAttribute), false);
-            if (arr.Length == 1)
-                endpointName = (arr[0] as EndpointNameAttribute).Name;
-
-            if (endpointConfiguration is INameThisEndpoint)
-                endpointName = (endpointConfiguration as INameThisEndpoint).GetName();
-
-            if (arguments.EndpointName != null)
-                endpointName = arguments.EndpointName.Value;
-
-            return endpointName;
-        }
+        
 
         static Type GetEndpointConfigurationType(HostArguments arguments)
         {
@@ -230,7 +251,7 @@ namespace NServiceBus.Hosting.Windows
 
             IEnumerable<Type> endpoints = ScanAssembliesForEndpoints();
             AssertThatNotMoreThanOneEndpointIsDefined(endpoints);
-            
+
             if ((endpoints.Count() == 0))
                 return null;
 
@@ -249,7 +270,7 @@ namespace NServiceBus.Hosting.Windows
                 }
         }
 
-        
+
         static void AssertThatNotMoreThanOneEndpointIsDefined(IEnumerable<Type> endpointConfigurationTypes)
         {
             if (endpointConfigurationTypes.Count() > 1)
@@ -266,5 +287,20 @@ namespace NServiceBus.Hosting.Windows
             }
         }
 
+    }
+
+    public class HostDefinition
+    {
+        public string ServiceName { get; set; }
+        public string Version { get; set; }
+        public string DisplayName { get; set; }
+        public EndpointInfo[] Endpoints { get; set; }
+    }
+
+    public class EndpointInfo
+    {
+        public string Name { get; set; }
+        public Type ConfigurationType { get; set; }
+        public string ConfigurationFile { get; set; }
     }
 }

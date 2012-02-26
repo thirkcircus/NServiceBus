@@ -6,22 +6,28 @@ namespace NServiceBus.Hosting.Windows.Arguments
 {
     internal class HostArguments
     {
-        public HostArguments(Parser.Args arguments)
+        public HostArguments(string[] args)
         {
-            Help = GetArgument(arguments, "help") ?? GetArgument(arguments, "?");
-            ServiceName = GetArgument(arguments, "serviceName");
-            DisplayName = GetArgument(arguments, "displayName");
-            Description = GetArgument(arguments, "description");
-            EndpointConfigurationType = GetArgument(arguments, "endpointConfigurationType");
-            DependsOn = GetArgument(arguments, "dependsOn");
-            StartManually = GetArgument(arguments, "startManually");
-            Username = GetArgument(arguments, "username");
-            Password = GetArgument(arguments, "password");
-            SideBySide = GetArgument(arguments, "sideBySide");
-            EndpointName = GetArgument(arguments, "endpointName");
-            InstallInfrastructure = GetArgument(arguments, "installInfrastructure");
+            CommandLineArgs = args;
+            Args = Parser.ParseArgs(args);
+            Install = Args.Install;
+            Help = GetArgument(Args, "help") ?? GetArgument(Args, "?");
+            ServiceName = GetArgument(Args, "serviceName");
+            DisplayName = GetArgument(Args, "displayName");
+            Description = GetArgument(Args, "description");
+            EndpointConfigurationType = GetArgument(Args, "endpointConfigurationType");
+            DependsOn = GetArgument(Args, "dependsOn");
+            StartManually = GetArgument(Args, "startManually");
+            Username = GetArgument(Args, "username");
+            Password = GetArgument(Args, "password");
+            SideBySide = GetArgument(Args, "sideBySide");
+            EndpointName = GetArgument(Args, "endpointName");
+            InstallInfrastructure = GetArgument(Args, "installInfrastructure");
         }
 
+        public string[] CommandLineArgs { get; set; }
+        public Parser.Args Args { get; private set; }
+        public bool Install { get; set; }
         public IArgument SideBySide{ get; set; }
         public IArgument Help { get; set; }
         public IArgument ServiceName { get; set; }
@@ -34,8 +40,7 @@ namespace NServiceBus.Hosting.Windows.Arguments
         public IArgument Password { get; set; }
         public IArgument EndpointName { get; set; }
         public IArgument InstallInfrastructure{ get; set; }
-
-
+        
         private static IArgument GetArgument(Parser.Args arguments, string key)
         {
             IArgument argument = arguments.CustomArguments.Where(x => x.Key != null).SingleOrDefault(x => x.Key.ToUpper() == key.ToUpper());
