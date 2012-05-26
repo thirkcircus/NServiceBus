@@ -71,6 +71,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="EndpointDefinition.cs" />
+    <Compile Include="HostConventions.cs" />
     <Compile Include="Installers\WindowsInstaller.cs" />
     <Compile Include="Profiles\Handlers\DistributorProfileHandler.cs" />
     <Compile Include="Profiles\Distributor.cs" />

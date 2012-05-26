@@ -59,8 +59,17 @@ namespace NServiceBus.Hosting.Helpers
         }
     }
 
-    internal static class AssemblyListExtensions
+    /// <summary>
+    /// Helpers for filtering scanned assemblies
+    /// </summary>
+    public static class AssemblyListExtensions
     {
+        /// <summary>
+        /// Gets all types in a collection of assemblies
+        /// </summary>
+        /// <param name="assemblies">A enumerable of assemblies</param>
+        /// <returns>All the types in the assemblies</returns>
+        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypes(this IEnumerable<Assembly> assemblies)
         {
             foreach (var assembly in assemblies)
@@ -70,22 +79,40 @@ namespace NServiceBus.Hosting.Helpers
                 }
         }
 
-
+        /// <summary>
+        /// Gets all types in a collection of assemblies that is assignable to the provided type
+        /// </summary>
+        /// <param name="assemblies">An enumerable of assemblies</param>
+        /// <returns>All the types in the assemblies that is assignable to the provided type</returns>
+        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypesAssignableTo<T>(this IEnumerable<Assembly> assemblies)
         {
             return assemblies.AllTypesAssignableTo(typeof(T));
         }
 
+        /// <summary>
+        /// Gets all types in a collection of assemblies that is assignable to the provided type
+        /// </summary>
+        /// <param name="assemblies">An enumerable of assemblies</param>
+        /// <param name="type">The type to filter by</param>
+        /// <returns>All the types in the assemblies that is assignable to the provided type</returns>
+        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypesAssignableTo(this IEnumerable<Assembly> assemblies, Type type)
         {
             return assemblies.AllTypes().Where(type.IsAssignableFrom);
         }
 
+        /// <summary>
+        /// Gets all types in a collection of assemblies that is assignable to the provided type
+        /// </summary>
+        /// <param name="assemblies">An enumerable of assemblies</param>
+        /// <param name="openGenericType">The open generic type</param>
+        /// <param name="genericArg">The generic argument</param>
+        /// <returns>All the types that close the given generic type</returns>
+        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypesClosing(this IEnumerable<Assembly> assemblies, Type openGenericType, Type genericArg)
         {
             return assemblies.AllTypes().Where(type => type.GetGenericallyContainedType(openGenericType, genericArg) != null);
         }
-
-
     }
 }
