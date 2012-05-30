@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using NServiceBus.Hosting.Helpers;
 using NServiceBus.Hosting.Windows.Arguments;
 using Topshelf;
 using Topshelf.Configuration;
@@ -28,6 +29,8 @@ namespace NServiceBus.Hosting.Windows
 
                 return;
             }
+
+            RunHostInitializers();
 
             var endpoints = HostConventions.GetEndpointDefinitions().ToArray();
 
@@ -60,7 +63,7 @@ namespace NServiceBus.Hosting.Windows
                     var endpoint = e;
                     x.ConfigureServiceInIsolation<WindowsHost>(endpoint.ConfigurationType.AssemblyQualifiedName, c =>
                     {
-                        var endpointArgs = HostConventions.GetArgumentsForEndpoint(endpoint);
+                        var endpointArgs = HostConventions.GetEndpointArguments(endpoint);
                         c.ConfigurationFile(endpoint.ConfigurationFile);
                         c.CommandLineArguments(endpointArgs.AsCommandLineArguments(), () => a => { });
                         c.WhenStarted(service => service.Start());
@@ -105,7 +108,18 @@ namespace NServiceBus.Hosting.Windows
 
             Runner.Host(cfg, args);
         }
-        
+
+        static void RunHostInitializers()
+        {
+            var hostInitializers = HostConventions.GetScannableAssemblies()
+                .AllInstancesAssignableTo<IWantCustomHostInitialization>();
+
+            foreach (var initializer in hostInitializers)
+            {
+                initializer.Initialize();
+            }
+        }
+
         static void InstallInfrastructure()
         {
             Configure.With(AllAssemblies.Except("NServiceBus.Host32.exe"));

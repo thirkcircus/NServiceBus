@@ -24,17 +24,27 @@ namespace NServiceBus.Hosting.Windows
 
         static HostConventions()
         {
+            RevertToDefaultConventions();
+        }
+
+        /// <summary>
+        /// Reverts all conventions to their default
+        /// </summary>
+        public static void RevertToDefaultConventions()
+        {
             GetHostArguments = () => null;
             GetScannableAssemblies = () => cachedAssemblies ?? (cachedAssemblies = AssemblyScanner.GetScannableAssemblies().Assemblies);
-            GetEndpointDefinitions = () => cachedEndpointDefinitions ?? (cachedEndpointDefinitions = DefaultGetEndpointDefinitions());
-            GetEndpointTypes = () => cachedEndpointTypes ?? (cachedEndpointTypes = DefaultGetEndpointTypes());
+            
             GetServiceName = () => cachedServiceName ?? (cachedServiceName = DefaultGetServiceName());
             GetServiceDisplayName = () => cachedDisplayName ?? (cachedDisplayName = DefaultGetServiceDisplayName());
+            GetServiceVersion = DefaultGetServiceVersion;
 
+            GetEndpointDefinitions = () => cachedEndpointDefinitions ?? (cachedEndpointDefinitions = DefaultGetEndpointDefinitions().ToArray());
+            CreateEndpointDefinitionFromConfigutationType = DefaultCreateEndpointDefinitionFromConfigutationType;
+            GetEndpointTypes = () => cachedEndpointTypes ?? (cachedEndpointTypes = DefaultGetEndpointTypes());
             GetEndpointName = DefaultGetEndpointName;
-            GetEndpointVersion = DefaultGetEndpointVersion;
             GetEndpointConfigurationFile = DefaultGetEndpointConfigurationFile;
-            GetArgumentsForEndpoint = DefaultGetArgumentsForEndpoint;
+            GetEndpointArguments = DefaultGetEndpointArguments;
         }
 
         /// <summary>
@@ -46,17 +56,7 @@ namespace NServiceBus.Hosting.Windows
         /// Gets the assemblies to use when scanning for types
         /// </summary>
         public static Func<IEnumerable<Assembly>> GetScannableAssemblies { get; set; }
-
-        /// <summary>
-        /// Gets the convention to use when selecting the endpoints to host
-        /// </summary>
-        public static Func<IEnumerable<EndpointDefinition>> GetEndpointDefinitions { get; set; }
-
-        /// <summary>
-        /// The convention to use when selecting the types for the endpoints to host
-        /// </summary>
-        public static Func<IEnumerable<Type>> GetEndpointTypes { get; set; }
-
+        
         /// <summary>
         /// Convention to get the name of the host service
         /// </summary>
@@ -68,15 +68,30 @@ namespace NServiceBus.Hosting.Windows
         public static Func<string> GetServiceDisplayName { get; set; }
 
         /// <summary>
+        /// Convention to get the version of an endpoint given its type
+        /// </summary>
+        public static Func<string> GetServiceVersion { get; set; }
+
+        /// <summary>
+        /// Gets the convention to use when selecting the endpoints to host
+        /// </summary>
+        public static Func<IEnumerable<EndpointDefinition>> GetEndpointDefinitions { get; set; }
+
+        /// <summary>
+        /// Gets the convention to create an endpoint definition given an endpoint configuration type
+        /// </summary>
+        public static Func<Type, EndpointDefinition> CreateEndpointDefinitionFromConfigutationType { get; set; }
+        
+        /// <summary>
+        /// The convention to use when selecting the types for the endpoints to host
+        /// </summary>
+        public static Func<IEnumerable<Type>> GetEndpointTypes { get; set; }
+        
+        /// <summary>
         /// Convention to get the name of an endpoint given its type
         /// </summary>
         public static Func<Type, string> GetEndpointName { get; set; }
-
-        /// <summary>
-        /// Convention to get the version of an endpoint given its type
-        /// </summary>
-        public static Func<Type, string> GetEndpointVersion { get; set; }
-
+        
         /// <summary>
         /// Convention to get the configuration file of an endpoint given its type
         /// </summary>
@@ -85,8 +100,79 @@ namespace NServiceBus.Hosting.Windows
         /// <summary>
         /// Gets the command line arguments to use when starting up an endpoint process
         /// </summary>
-        public static Func<EndpointDefinition, HostArguments> GetArgumentsForEndpoint { get; set; } 
+        public static Func<EndpointDefinition, HostArguments> GetEndpointArguments { get; set; }
 
+        /// <summary>
+        /// Default convention for getting the name of the host service
+        /// </summary>
+        /// <returns>The service name</returns>
+        public static string DefaultGetServiceName()
+        {
+            var arguments = GetHostArguments();
+
+            if (arguments.ServiceName != null)
+                return arguments.ServiceName.Value;
+
+            var endpoint = GetEndpointDefinitions().FirstOrDefault();
+
+            if (endpoint == null)
+                throw new InvalidOperationException("Cannot define the service name for the host. No endpoint is defined & a service name argument was not provided");
+
+            var serviceName = endpoint.Name;
+
+            if (arguments.SideBySide != null)
+            {
+                var version = GetServiceVersion();
+                serviceName += "-" + version;
+            }
+
+            return serviceName;
+        }
+
+        /// <summary>
+        /// Default convention for getting the display name of the host service
+        /// </summary>
+        /// <returns>The display name</returns>
+        public static string DefaultGetServiceDisplayName()
+        {
+            var endpoint = GetEndpointDefinitions()
+                .FirstOrDefault();
+
+            if (endpoint == null)
+                throw new InvalidOperationException("Cannot define the service name for the host. No endpoint is defined & a service name argument was not provided");
+
+            var serviceName = GetServiceName();
+
+            var displayName = serviceName + "-" + GetServiceVersion();
+
+            var arguments = GetHostArguments();
+
+            if (arguments.SideBySide != null)
+            {
+                displayName += " (SideBySide)";
+            }
+
+            return displayName;
+        }
+
+        /// <summary>
+        /// Default convention for getting the version of an endpoint
+        /// </summary>
+        /// <param name="endpointConfigurationType"></param>
+        /// <returns>The version of the endpoint</returns>
+        public static string DefaultGetServiceVersion()
+        {
+            var endpoint = GetEndpointDefinitions().FirstOrDefault();
+
+            if (endpoint == null)
+                throw new InvalidOperationException("Cannot get version for host service. Atleast one endpoint must be defined");
+
+            var fileVersion = FileVersionInfo.GetVersionInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, endpoint.ConfigurationType.Assembly.ManifestModule.Name));
+
+            //build a semver compliant version
+            return String.Format("{0}.{1}.{2}", fileVersion.FileMajorPart, fileVersion.FileMinorPart, fileVersion.FileBuildPart);
+        }
+        
         /// <summary>
         /// The default convention for getting the endpoint definitions to host
         /// </summary>
@@ -101,24 +187,13 @@ namespace NServiceBus.Hosting.Windows
                                                     "Endpoint classes found: " +
                                                     String.Join(", ", endpointTypes.Select(e => e.AssemblyQualifiedName).ToArray()) +
                                                     " You may have some old assemblies in your runtime directory." +
-                                                    " Try right-clicking your VS project, and selecting 'Clean'."
+                                                    " Try right-clicking your VS project, and selecting 'Clean'. " +
+                                                    "If you want to run multiple endpoints in a single host, you can run in multihost mode using the '/multihost' command-line argument"
                     );
 
             }
 
-            foreach (var endpointType in endpointTypes)
-            {
-                var constructor = endpointType.GetConstructor(Type.EmptyTypes);
-
-                if (constructor == null)
-                    throw new InvalidOperationException("Endpoint configuration type needs to have a default constructor: " + endpointType.FullName);
-
-                var name = GetEndpointName(endpointType);
-                var version = GetEndpointVersion(endpointType);
-                var configFile = GetEndpointConfigurationFile(endpointType);
-
-                yield return new EndpointDefinition(endpointType, name, version, configFile);
-            }
+            return endpointTypes.Select(DefaultCreateEndpointDefinitionFromConfigutationType).ToArray();
         }
 
         /// <summary>
@@ -163,6 +238,26 @@ namespace NServiceBus.Hosting.Windows
         }
 
         /// <summary>
+        /// The default convention for creating endpoint definitions from an endpointType
+        /// </summary>
+        /// <param name="endpointType"></param>
+        /// <returns></returns>
+        public static EndpointDefinition DefaultCreateEndpointDefinitionFromConfigutationType(Type endpointType)
+        {
+            var constructor = endpointType.GetConstructor(Type.EmptyTypes);
+
+            if (constructor == null)
+                throw new InvalidOperationException("Endpoint configuration type needs to have a default constructor: " +
+                                                    endpointType.FullName);
+
+            var name = GetEndpointName(endpointType);
+            var configFile = GetEndpointConfigurationFile(endpointType);
+
+            var endpoint = new EndpointDefinition(endpointType, name, configFile);
+            return endpoint;
+        }
+        
+        /// <summary>
         /// Default convention for getting the endpoint name, which serves to identify the endpoint.
         /// </summary>
         /// <param name="endpointConfigurationType"></param>
@@ -201,76 +296,11 @@ namespace NServiceBus.Hosting.Windows
         }
 
         /// <summary>
-        /// Default convention for getting the version of an endpoint
-        /// </summary>
-        /// <param name="endpointConfigurationType"></param>
-        /// <returns>The version of the endpoint</returns>
-        public static string DefaultGetEndpointVersion(Type endpointConfigurationType)
-        {
-            var fileVersion = FileVersionInfo.GetVersionInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, endpointConfigurationType.Assembly.ManifestModule.Name));
-
-            //build a semver compliant version
-            return String.Format("{0}.{1}.{2}", fileVersion.FileMajorPart, fileVersion.FileMinorPart, fileVersion.FileBuildPart);
-        }
-
-        /// <summary>
-        /// Default convention for getting the name of the host service
-        /// </summary>
-        /// <returns>The service name</returns>
-        public static string DefaultGetServiceName()
-        {
-            var arguments = GetHostArguments();
-
-            if (arguments.ServiceName != null)
-                return arguments.ServiceName.Value;
-
-            var endpoint = GetEndpointDefinitions().FirstOrDefault();
-
-            if (endpoint == null)
-                throw new InvalidOperationException("Cannot define the service name for the host. No endpoint is defined & a service name argument was not provided");
-
-            var serviceName = endpoint.Name;
-
-            if (arguments.SideBySide != null)
-            {
-                serviceName += "-" + endpoint.Version;
-            }
-
-            return serviceName;
-        }
-
-        /// <summary>
-        /// Default convention for getting the display name of the host service
-        /// </summary>
-        /// <returns>The display name</returns>
-        public static string DefaultGetServiceDisplayName()
-        {
-            var endpoint = GetEndpointDefinitions()
-                .FirstOrDefault();
-
-            if (endpoint == null)
-                throw new InvalidOperationException("Cannot define the service name for the host. No endpoint is defined & a service name argument was not provided");
-
-            var serviceName = GetServiceName();
-
-            var displayName = serviceName + "-" + endpoint.Version;
-
-            var arguments = GetHostArguments();
-
-            if (arguments.SideBySide != null)
-            {
-                displayName += " (SideBySide)";
-            }
-
-            return displayName;
-        }
-
-        /// <summary>
         /// Default convention gor getting the command line arguments to use when starting up an endpoint process
         /// </summary>
         /// <param name="endpoint"></param>
         /// <returns></returns>
-        public static HostArguments DefaultGetArgumentsForEndpoint(EndpointDefinition endpoint)
+        public static HostArguments DefaultGetEndpointArguments(EndpointDefinition endpoint)
         {
             var arguments = GetHostArguments();
             IEnumerable<string> args = arguments.AsCommandLineArguments();

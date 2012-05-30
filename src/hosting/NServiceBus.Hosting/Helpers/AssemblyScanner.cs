@@ -19,7 +19,6 @@ namespace NServiceBus.Hosting.Helpers
         /// 
         /// </summary>
         /// <returns></returns>
-        [DebuggerNonUserCode] //so that exceptions don't jump at the developer debugging their app
         public static AssemblyScannerResults GetScannableAssemblies()
         {
             var assemblyFiles = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory).GetFiles("*.dll", SearchOption.AllDirectories)
@@ -84,7 +83,6 @@ namespace NServiceBus.Hosting.Helpers
         /// </summary>
         /// <param name="assemblies">An enumerable of assemblies</param>
         /// <returns>All the types in the assemblies that is assignable to the provided type</returns>
-        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypesAssignableTo<T>(this IEnumerable<Assembly> assemblies)
         {
             return assemblies.AllTypesAssignableTo(typeof(T));
@@ -96,7 +94,6 @@ namespace NServiceBus.Hosting.Helpers
         /// <param name="assemblies">An enumerable of assemblies</param>
         /// <param name="type">The type to filter by</param>
         /// <returns>All the types in the assemblies that is assignable to the provided type</returns>
-        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypesAssignableTo(this IEnumerable<Assembly> assemblies, Type type)
         {
             return assemblies.AllTypes().Where(type.IsAssignableFrom);
@@ -109,10 +106,35 @@ namespace NServiceBus.Hosting.Helpers
         /// <param name="openGenericType">The open generic type</param>
         /// <param name="genericArg">The generic argument</param>
         /// <returns>All the types that close the given generic type</returns>
-        [DebuggerNonUserCode]
         public static IEnumerable<Type> AllTypesClosing(this IEnumerable<Assembly> assemblies, Type openGenericType, Type genericArg)
         {
             return assemblies.AllTypes().Where(type => type.GetGenericallyContainedType(openGenericType, genericArg) != null);
+        }
+
+        /// <summary>
+        /// Instantiates all types in a collection of assemblies that is assignable to the provided type
+        /// </summary>
+        /// <param name="assemblies">An enumerable of assemblies</param>
+        /// <returns>
+        /// Instantiated instances of all the types in the assemblies that is assignable to the 
+        /// provided type
+        /// </returns>
+        public static IEnumerable<T> AllInstancesAssignableTo<T>(this IEnumerable<Assembly> assemblies)
+        {
+            var types = assemblies.AllTypesAssignableTo(typeof(T))
+                .Where(t => !t.IsAbstract && !t.IsInterface);
+
+            var instances = types.Select(t =>
+            {
+                var constructor = t.GetConstructor(Type.EmptyTypes);
+
+                if (constructor == null)
+                    throw new InvalidOperationException(string.Format("Cannot instantiate type {0} implementing {1}. The type needs to have a default constructor.", t.AssemblyQualifiedName, typeof(T).AssemblyQualifiedName));
+
+                return (T)Activator.CreateInstance(t);
+            }).ToArray();
+
+            return instances;
         }
     }
 }

@@ -74,6 +74,8 @@
     <Compile Include="EndpointDefinition.cs" />
     <Compile Include="HostConventions.cs" />
     <Compile Include="Installers\WindowsInstaller.cs" />
+    <Compile Include="IWantCustomHostInitialization.cs" />
+    <Compile Include="MultiHost\MultiHostConventions.cs" />
     <Compile Include="Profiles\Handlers\DistributorProfileHandler.cs" />
     <Compile Include="Profiles\Distributor.cs" />
     <Compile Include="Profiles\MultiSite.cs" />

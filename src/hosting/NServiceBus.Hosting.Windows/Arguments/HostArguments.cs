@@ -24,19 +24,19 @@ namespace NServiceBus.Hosting.Windows.Arguments
             arguments = Parser.ParseArgs(args);
             customArguments = arguments.CustomArguments;
 
-            Help = GetArgument(arguments, "help") ?? GetArgument(arguments, "?");
-            ServiceName = GetArgument(arguments, "serviceName");
-            DisplayName = GetArgument(arguments, "displayName");
-            Description = GetArgument(arguments, "description");
-            EndpointConfigurationType = GetArgument(arguments, "endpointConfigurationType");
-            DependsOn = GetArgument(arguments, "dependsOn");
-            StartManually = GetArgument(arguments, "startManually");
-            Username = GetArgument(arguments, "username");
-            Password = GetArgument(arguments, "password");
-            SideBySide = GetArgument(arguments, "sideBySide");
-            EndpointName = GetArgument(arguments, "endpointName");
-            InstallInfrastructure = GetArgument(arguments, "installInfrastructure");
-            ScannedAssemblies = GetArgument(arguments, "scannedAssemblies");
+            Help = GetArgument("help") ?? GetArgument("?");
+            ServiceName = GetArgument("serviceName");
+            DisplayName = GetArgument("displayName");
+            Description = GetArgument("description");
+            EndpointConfigurationType = GetArgument("endpointConfigurationType");
+            DependsOn = GetArgument("dependsOn");
+            StartManually = GetArgument("startManually");
+            Username = GetArgument("username");
+            Password = GetArgument("password");
+            SideBySide = GetArgument("sideBySide");
+            EndpointName = GetArgument("endpointName");
+            InstallInfrastructure = GetArgument("installInfrastructure");
+            ScannedAssemblies = GetArgument("scannedAssemblies");
             Install = arguments.Install;
         }
 
@@ -109,15 +109,17 @@ namespace NServiceBus.Hosting.Windows.Arguments
         /// Argument that specifies if the host should install itself as a service
         /// </summary>
         public bool Install { get; set; }
-
-        private static IArgument GetArgument(Parser.Args arguments, string key)
+        
+        /// <summary>
+        /// Gets a custom argument with the provided key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns>The argument with the provided key or null</returns>
+        public IArgument GetCustomArgument(string key)
         {
-            IArgument argument = arguments.CustomArguments.Where(x => x.Key != null).SingleOrDefault(x => x.Key.ToUpper() == key.ToUpper());
-
-            if (argument != null)
-            {
-                arguments.CustomArguments = arguments.CustomArguments.Except(new[] { argument });
-            }
+            var argument = arguments.CustomArguments
+                .Where(x => x.Key != null)
+                .SingleOrDefault(x => x.Key.ToUpper() == key.ToUpper());
 
             return argument;
         }
@@ -138,6 +140,18 @@ namespace NServiceBus.Hosting.Windows.Arguments
         public string AsCommandLine()
         {
             return customArguments.AsCommandLine();
+        }
+
+        private IArgument GetArgument(string key)
+        {
+            var argument = GetCustomArgument(key);
+
+            if (argument != null)
+            {
+                arguments.CustomArguments = arguments.CustomArguments.Except(new[] { argument });
+            }
+
+            return argument;
         }
     }
 }

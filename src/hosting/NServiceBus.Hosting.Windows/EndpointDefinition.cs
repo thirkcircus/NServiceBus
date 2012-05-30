@@ -12,13 +12,11 @@ namespace NServiceBus.Hosting.Windows
         /// </summary>
         /// <param name="configurationType"></param>
         /// <param name="name"></param>
-        /// <param name="version"></param>
         /// <param name="configurationFile"></param>
-        public EndpointDefinition(Type configurationType, string name, string version, string configurationFile)
+        public EndpointDefinition(Type configurationType, string name, string configurationFile)
         {
             ConfigurationType = configurationType;
             Name = name;
-            Version = version;
             ConfigurationFile = configurationFile;
         }
 
@@ -26,11 +24,6 @@ namespace NServiceBus.Hosting.Windows
         /// The name of the endpoint, which serves to identify the endpoint
         /// </summary>
         public string Name { get; set; }
-
-        /// <summary>
-        /// The version of the endpoint. This will be used in side by side mode
-        /// </summary>
-        public string Version { get; set; }
 
         /// <summary>
         /// The type that will be used to configure the endpoint
