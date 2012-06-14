@@ -1,52 +1,59 @@
 using System;
 using System.Diagnostics;
-using NServiceBus;
+using System.Globalization;
 using MyMessages;
+using NServiceBus;
 
 namespace MyClient
 {
     public class ClientEndpoint : IWantToRunWhenBusStartsAndStops
     {
         public IBus Bus { get; set; }
+        private const int Max = 40000;
+        public void Run()
+        {
+            Console.WriteLine("Sending messages: " + Max);
+            var counter = 0;
+            var requestDataMessage = new RequestDataMessage[Max];
 
+            while (counter < Max)
+            {
+                requestDataMessage[counter] = new RequestDataMessage()
+                {
+                    DataId = new Guid(),
+                    String = counter.ToString(CultureInfo.InvariantCulture)
+                };
+                counter++;
+            }
+            
+            counter = 0;
+            var watch = new Stopwatch();
+            watch.Start();
+            while (counter < Max)
+            {
+                Bus.Send(requestDataMessage[counter]);
+                counter++;
+                if (counter % 10000 == 0)
+                {
+                    Console.WriteLine("Time to send: [{0}] messages is: [{1}]", counter, watch.Elapsed.TotalMilliseconds);
+                    watch.Restart();
+                }
+            }
+            
+            watch.Stop();
+        }
+
+        /// <summary>
+        /// Method called at startup.
+        /// </summary>
         public void Start()
         {
-            Console.WriteLine("Press 'Enter' to send a message.To exit, Ctrl + C");
-
-            while (Console.ReadLine() != null)
-            {
-                Guid g = Guid.NewGuid();
-
-                Console.WriteLine("==========================================================================");
-                Console.WriteLine("Requesting to get data by id: {0}", g.ToString("N"));
-
-                Bus.OutgoingHeaders["Test"] = g.ToString("N");
-
-                var watch = new Stopwatch();
-                watch.Start();
-                Bus.Send<RequestDataMessage>(m =>
-                                                 {
-                                                     m.DataId = g;
-                                                     m.String = "<node>it's my \"node\" & i like it<node>";
-                                                 })
-                    .Register<int>(i => 
-                        {
-                            Console.WriteLine("==========================================================================");
-                            Console.WriteLine(
-                                "Response with header 'Test' = {0}, 1 = {1}, 2 = {2}.",
-                                Bus.CurrentMessageContext.Headers["Test"],
-                                Bus.CurrentMessageContext.Headers["1"],
-                                Bus.CurrentMessageContext.Headers["2"]);
-                        });
-
-                watch.Stop();
-
-                Console.WriteLine("Elapsed time: {0}", watch.ElapsedMilliseconds);
-            }
+            Run();
         }
 
         public void Stop()
         {
+            Console.WriteLine("SToppppp was called");
         }
     }
 }

@@ -1,17 +1,7 @@
-﻿using System;
-using MyMessages;
-using NServiceBus;
+﻿using NServiceBus;
 
 namespace MyClient
 {
-    class DataResponseMessageHandler : IHandleMessages<DataResponseMessage>
-    {
-        public void Handle(DataResponseMessage message)
-        {
-            Console.WriteLine("Response received with description: {0}", message.String);
-        }
-    }
-    
     public class PreventSubscription : IWantCustomInitialization
     {
         public void Init()

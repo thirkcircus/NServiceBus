@@ -1,27 +1,27 @@
-﻿using System;
-using MyMessages;
-using NUnit.Framework;
-using NServiceBus.Testing;
-using NServiceBus;
+﻿//using System;
+//using MyMessages;
+//using NUnit.Framework;
+//using NServiceBus.Testing;
+//using NServiceBus;
 
-namespace MyServer.Tests
-{
-    [TestFixture]
-    public class Tests
-    {
-        [Test]
-        public void TestHandler()
-        {
-            Test.Initialize();
+//namespace MyServer.Tests
+//{
+//    [TestFixture]
+//    public class Tests
+//    {
+//        [Test]
+//        public void TestHandler()
+//        {
+//            Test.Initialize();
 
-            var dataId = Guid.NewGuid();
-            var str = "hello";
-            WireEncryptedString secret = "secret";
+//            var dataId = Guid.NewGuid();
+//            var str = "hello";
+//            WireEncryptedString secret = "secret";
 
-            Test.Handler<RequestDataMessageHandler>()
-                .SetIncomingHeader("Test", "abc")
-                .ExpectReply<DataResponseMessage>(m => m.DataId == dataId && m.String == str)
-                .OnMessage<RequestDataMessage>(m => { m.DataId = dataId; m.String = str; });
-        }
-    }
-}
+//            Test.Handler<RequestDataMessageHandler>()
+//                .SetIncomingHeader("Test", "abc")
+//                .ExpectReply<DataResponseMessage>(m => m.DataId == dataId && m.String == str)
+//                .OnMessage<RequestDataMessage>(m => { m.DataId = dataId; m.String = str; });
+//        }
+//    }
+//}
