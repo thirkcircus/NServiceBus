@@ -3,7 +3,7 @@ using System;
 
 namespace MyMessages
 {
-//    [Express]
+    [Express]
     public class RequestDataMessage : ICommand
     {
         public Guid DataId { get; set; }

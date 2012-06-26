@@ -23,7 +23,7 @@ namespace MyServer
             counter++;
             if ((counter % Max) == 0)
             {
-                Console.WriteLine(string.Format("Time to receive: [{0}] messages is: [{1}]", counter, sw.Elapsed.TotalMilliseconds));
+                Console.WriteLine(string.Format("Time to receive: [{0}] messages is: [{1}]", counter, sw.Elapsed.TotalSeconds));
                 sw.Restart();
             }
         }

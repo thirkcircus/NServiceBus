@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using MyMessages;
 using NServiceBus;
 
@@ -43,12 +45,30 @@ namespace MyClient
             watch.Stop();
         }
 
+        public static int NumberOfThreads = 1;
+        public static int MessagesToSend = 1;
         /// <summary>
         /// Method called at startup.
         /// </summary>
         public void Start()
         {
-            Run();
+            var threads = new List<Thread>();
+            for (var i = 0; i < NumberOfThreads; i++)
+            {
+                
+                var messageSender = new MessageSender(MessagesToSend, Bus);
+
+                var t = new Thread(new ThreadStart(messageSender.SendMessages));
+                threads.Add(t);
+                t.Start();//start the new thread
+            }
+            var watch = new Stopwatch();
+            watch.Start(); 
+            foreach (var t in threads)
+                t.Join();
+            watch.Stop();
+            Console.WriteLine("After waiting for [{0}] threads. Time to send: [{1}] messages is: [{2}]", NumberOfThreads, NumberOfThreads * MessagesToSend, watch.Elapsed.TotalSeconds);
+            Stop();
         }
 
         public void Stop()
