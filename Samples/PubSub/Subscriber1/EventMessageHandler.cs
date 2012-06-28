@@ -1,7 +1,7 @@
 using System;
-using log4net;
 using MyMessages;
 using NServiceBus;
+using NServiceBus.Logging;
 
 namespace Subscriber1
 {
