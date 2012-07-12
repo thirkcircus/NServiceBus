@@ -1,14 +1,37 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Messaging;
 using System.Net;
 using System.Security.Principal;
+using System.Transactions;
 using NServiceBus;
 
 namespace MsmqMessageReceiver
 {
     public class MsmqMessageReceiver
     {
+        private const string DIRECTPREFIX = "DIRECT=OS:";
+        private const string PRIVATE = "\\private$\\";
+        private static readonly string DIRECTPREFIX_TCP = "DIRECT=TCP:";
+        private static readonly string PREFIX_TCP = "FormatName:" + DIRECTPREFIX_TCP;
+        private static readonly string PREFIX = "FormatName:" + DIRECTPREFIX;
+        private MessageQueue myQueue;
+        private int secondsToWait = 1;
+        private bool useTransactions;
+
+        /// <summary>
+        /// Sets whether or not the transport should purge the input
+        /// queue when it is started.
+        /// </summary>
+        public bool PurgeOnStartup { get; set; }
+
+        public int SecondsToWaitForMessage
+        {
+            get { return secondsToWait; }
+            set { secondsToWait = value; }
+        }
+
+        public bool TransactionalQueue { get; set; }
+
         public void Init(string address, bool transactional)
         {
             Init(Address.Parse(address), transactional);
@@ -21,11 +44,12 @@ namespace MsmqMessageReceiver
             if (address == null)
                 throw new ArgumentException("Input queue must be specified");
 
-            var machine = address.Machine;
+            string machine = address.Machine;
 
             if (machine.ToLower() != Environment.MachineName.ToLower())
-                throw new InvalidOperationException(string.Format("Input queue [{0}] must be on the same machine as this process [{1}].",
-                    address, Environment.MachineName.ToLower()));
+                throw new InvalidOperationException(
+                    string.Format("Input queue [{0}] must be on the same machine as this process [{1}].",
+                                  address, Environment.MachineName.ToLower()));
 
             myQueue = new MessageQueue(GetFullPath(address));
 
@@ -45,7 +69,7 @@ namespace MsmqMessageReceiver
         {
             try
             {
-                var m = myQueue.Peek(TimeSpan.FromMilliseconds(1));
+                Message m = myQueue.Peek(TimeSpan.FromMilliseconds(1));
                 return true;
             }
             catch (MessageQueueException e)
@@ -59,15 +83,27 @@ namespace MsmqMessageReceiver
             return true;
         }
 
-        public Message Receive(bool trx)
+        public Message Receive()
         {
             try
             {
                 Message m;
-                if(trx == false)
-                    m = myQueue.Receive(TimeSpan.FromSeconds(secondsToWait), MessageQueueTransactionType.None);
+                if (TransactionalQueue)
+                {
+                    using (
+                        var scope = new TransactionScope(TransactionScopeOption.Required,
+                                                         new TransactionOptions
+                                                             {
+                                                                 IsolationLevel = IsolationLevel.RepeatableRead,
+                                                                 Timeout = TimeSpan.FromSeconds(30)
+                                                             }))
+                    {
+                        m = myQueue.Receive(TimeSpan.FromSeconds(secondsToWait), GetTransactionTypeForReceive());
+                        scope.Complete();
+                    }
+                }
                 else
-                    m = myQueue.Receive(TimeSpan.FromSeconds(secondsToWait), GetTransactionTypeForReceive());
+                    m = myQueue.Receive(TimeSpan.FromSeconds(secondsToWait), MessageQueueTransactionType.None);
 
                 return m;
             }
@@ -78,7 +114,11 @@ namespace MsmqMessageReceiver
 
                 if (mqe.MessageQueueErrorCode == MessageQueueErrorCode.AccessDenied)
                 {
-                    string errorException = string.Format("Do not have permission to access queue [{0}]. Make sure that the current user [{1}] has permission to Send, Receive, and Peek  from this queue.", myQueue.QueueName, WindowsIdentity.GetCurrent() != null ? WindowsIdentity.GetCurrent().Name : "unknown user");
+                    string errorException =
+                        string.Format(
+                            "Do not have permission to access queue [{0}]. Make sure that the current user [{1}] has permission to Send, Receive, and Peek  from this queue.",
+                            myQueue.QueueName,
+                            WindowsIdentity.GetCurrent() != null ? WindowsIdentity.GetCurrent().Name : "unknown user");
                     Console.WriteLine(errorException);
                     throw new InvalidOperationException(errorException, mqe);
                 }
@@ -87,7 +127,7 @@ namespace MsmqMessageReceiver
             }
         }
 
-        bool QueueIsTransactional()
+        private bool QueueIsTransactional()
         {
             try
             {
@@ -95,7 +135,10 @@ namespace MsmqMessageReceiver
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(string.Format("There is a problem with the input queue: {0}. See the enclosed exception for details.", myQueue.Path), ex);
+                throw new InvalidOperationException(
+                    string.Format(
+                        "There is a problem with the input queue: {0}. See the enclosed exception for details.",
+                        myQueue.Path), ex);
             }
         }
 
@@ -112,14 +155,17 @@ namespace MsmqMessageReceiver
 
             return PREFIX + GetFullPathWithoutPrefix(value);
         }
+
         public static string GetFullPathWithoutPrefix(string value)
         {
             return getMachineNameFromLogicalName(value) + PRIVATE + getQueueNameFromLogicalName(value);
         }
+
         public static string GetFullPathWithoutPrefix(Address address)
         {
             return address.Machine + PRIVATE + address.Queue;
         }
+
         private static string getMachineNameFromLogicalName(string logicalName)
         {
             string[] arr = logicalName.Split('@');
@@ -132,6 +178,7 @@ namespace MsmqMessageReceiver
 
             return machine;
         }
+
         private static string getQueueNameFromLogicalName(string logicalName)
         {
             string[] arr = logicalName.Split('@');
@@ -141,29 +188,5 @@ namespace MsmqMessageReceiver
 
             return null;
         }
-
-        /// <summary>
-        /// Sets whether or not the transport should purge the input
-        /// queue when it is started.
-        /// </summary>
-        public bool PurgeOnStartup { get; set; }
-
-
-        private int secondsToWait = 1;
-        public int SecondsToWaitForMessage
-        {
-            get { return secondsToWait; }
-            set { secondsToWait = value; }
-        }
-
-        private MessageQueue myQueue;
-
-        private bool useTransactions;
-        private const string DIRECTPREFIX = "DIRECT=OS:";
-        private static readonly string DIRECTPREFIX_TCP = "DIRECT=TCP:";
-        private readonly static string PREFIX_TCP = "FormatName:" + DIRECTPREFIX_TCP;
-        private static readonly string PREFIX = "FormatName:" + DIRECTPREFIX;
-        private const string PRIVATE = "\\private$\\";
-
     }
 }

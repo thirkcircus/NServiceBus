@@ -9,26 +9,28 @@ namespace MyClient
 {
     public class MessageSender
     {
-        public IBus Bus { get; set; }
-        private readonly int messagesToSend = 0;
+        private readonly int messagesToSend;
 
         public MessageSender(int count, IBus bus)
         {
             messagesToSend = count;
             Bus = bus;
         }
+
+        public IBus Bus { get; set; }
+
         public void SendMessages()
         {
-            var counter = 0;
+            int counter = 0;
             var requestDataMessage = new RequestDataMessage[messagesToSend];
 
             while (counter < messagesToSend)
             {
-                requestDataMessage[counter] = new RequestDataMessage()
-                {
-                    DataId = new Guid(),
-                    String = counter.ToString(CultureInfo.InvariantCulture)
-                };
+                requestDataMessage[counter] = new RequestDataMessage
+                                                  {
+                                                      DataId = new Guid(),
+                                                      String = counter.ToString(CultureInfo.InvariantCulture)
+                                                  };
                 counter++;
             }
             counter = 0;
@@ -40,7 +42,8 @@ namespace MyClient
                 counter++;
             }
             watch.Stop();
-            Console.WriteLine("ThreadId: [{0}]. Time to send: [{1}] messages is: [{2}]", Thread.CurrentThread.ManagedThreadId, counter, watch.Elapsed.TotalSeconds);
+            Console.WriteLine("ThreadId: [{0}]. Time to send: [{1}] messages is: [{2}]",
+                              Thread.CurrentThread.ManagedThreadId, counter, watch.Elapsed.TotalSeconds);
         }
     }
 }

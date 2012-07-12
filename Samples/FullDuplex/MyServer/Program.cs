@@ -5,31 +5,31 @@ using NServiceBus.Unicast.Transport.Transactional.Config;
 
 namespace MyServer
 {
-    class Program
+    internal class Program
     {
-        static void Main()
+        private static void Main()
         {
-            
             Configure.With()
                 .DefaultBuilder()
-                .XmlSerializer()
+                //.XmlSerializer()
+                .BinarySerializer()
                 .MsmqTransport()
-                    .IsTransactional(false)
-                    .PurgeOnStartup(false)
-                    .DoNotCreateQueues()
-                    .SupressDTC()
-                    .DisableSecondLevelRetries()
+                .IsTransactional(false)
+                .PurgeOnStartup(false)
+                .DoNotCreateQueues()
+                .SupressDTC()
+                .DisableSecondLevelRetries()
                 .DisableTimeoutManager()
                 .DisableNotifications()
                 .InMemoryFaultManagement()
                 .UnicastBus()
-                    .ImpersonateSender(false)
-                    .LoadMessageHandlers()
+                .ImpersonateSender(false)
+                .LoadMessageHandlers()
                 .CreateBus()
                 .Start();
-                //.Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());
+            //.Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());
 
-            
+
             Console.Read();
         }
     }

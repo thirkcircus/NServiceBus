@@ -5,12 +5,12 @@ using NServiceBus.Unicast.Transport.Transactional.Config;
 
 namespace MyClient
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
-            if(args.Length < 2)
-            {    
+            if (args.Length < 2)
+            {
                 Console.WriteLine("Usage: MyClient [number of threads] [number of messages to send]");
                 return;
             }
@@ -19,19 +19,20 @@ namespace MyClient
             ClientEndpoint.MessagesToSend = int.Parse(args[1]);
             Configure.With()
                 .DefaultBuilder()
-                .XmlSerializer()
+                //.XmlSerializer()
+                .BinarySerializer()
                 .MsmqTransport()
-                    .IsTransactional(false)
-                    .PurgeOnStartup(false)
-                    .DoNotCreateQueues()
-                    .SupressDTC()
+                .IsTransactional(false)
+                .PurgeOnStartup(false)
+                .DoNotCreateQueues()
+                .SupressDTC()
                 .DisableSecondLevelRetries()
                 .DisableTimeoutManager()
                 .DisableNotifications()
                 .InMemoryFaultManagement()
                 .UnicastBus()
-                    .ImpersonateSender(false)
-                    .LoadMessageHandlers()
+                .ImpersonateSender(false)
+                .LoadMessageHandlers()
                 .CreateBus()
                 .Start();
             //.Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());

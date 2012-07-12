@@ -1,6 +1,4 @@
-﻿using NServiceBus;
-
-namespace MyClient
+﻿namespace MyClient
 {
     //public class PreventSubscription : IWantCustomInitialization
     //{

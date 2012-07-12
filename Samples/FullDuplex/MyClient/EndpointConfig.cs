@@ -1,7 +1,3 @@
-using NServiceBus;
-using NServiceBus.Config;
-using NServiceBus.Unicast.Transport.Transactional.Config;
-
 namespace MyClient
 {
     //public class EndpointConfig : IConfigureThisEndpoint, AsA_Client, IWantCustomInitialization
