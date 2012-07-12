@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Linq.Expressions;
 using Raven.Client;
 using Raven.Client.Document;
 
@@ -12,8 +11,34 @@ namespace NServiceBus
 
     public static class ConfigureRavenPersistence
     {
+        /// <summary>
+        /// Configures Raven Persister.
+        /// </summary>
+        /// <remarks>
+        /// Reads configuration settings from <a href="http://msdn.microsoft.com/en-us/library/ms228154.aspx">&lt;appSettings&gt; config section</a> and <a href="http://msdn.microsoft.com/en-us/library/bf7sd233">&lt;connectionStrings&gt; config section</a>.
+        /// </remarks>
+        /// <example>
+        /// An example that shows the configuration:
+        /// <code lang="XML" escaped="true">
+        ///  <appSettings>
+        ///    <!-- Optional overrider for number of requests that each RavenDB session is allowed to make -->
+        ///    <add key="NServiceBus/Persistence/RavenDB/MaxNumberOfRequestsPerSession" value="50"/>
+        ///  </appSettings>
+        ///  
+        ///  <connectionStrings>
+        ///    <!-- Default connection string name -->
+        ///    <add name="NServiceBus.Persistence" connectionString="http://localhost:8080" />
+        ///  </connectionStrings>
+        /// </code>
+        /// </example>
+        /// <param name="config">The configuration object.</param>
+        /// <returns>The configuration object.</returns>
         public static Configure RavenPersistence(this Configure config)
         {
+            //If it's already configured don't do it again!
+            if (config.Configurer.HasComponent<IDocumentStore>())
+                return config;
+
             var connectionStringEntry = ConfigurationManager.ConnectionStrings["NServiceBus.Persistence"];
 
             //use existing config if we can find one
@@ -110,12 +135,22 @@ namespace NServiceBus
             var conventions = new RavenConventions();
 
             store.Conventions.FindTypeTagName = tagNameConvention ?? conventions.FindTypeTagName;
+            
 
             EnsureDatabaseExists((DocumentStore)store);
             store.Initialize();
 
-            //We need to turn compression off to make us compatible with Raven616
+			//We need to turn compression off to make us compatible with Raven616
             store.JsonRequestFactory.DisableRequestCompression = !enableRequestCompression;
+
+            var maxNumberOfRequestsPerSession = 100;
+            var ravenMaxNumberOfRequestsPerSession = ConfigurationManager.AppSettings["NServiceBus/Persistence/RavenDB/MaxNumberOfRequestsPerSession"];
+            if (!String.IsNullOrEmpty(ravenMaxNumberOfRequestsPerSession))
+            {
+                if(!Int32.TryParse(ravenMaxNumberOfRequestsPerSession, out maxNumberOfRequestsPerSession))
+                    throw new ConfigurationErrorsException(string.Format("Cannot configure RavenDB MaxNumberOfRequestsPerSession. Cannot convert value '{0}' in <appSettings> with key 'NServiceBus/Persistence/RavenDB/MaxNumberOfRequestsPerSession' to a numeric value.", ravenMaxNumberOfRequestsPerSession));
+            }
+            store.Conventions.MaxNumberOfRequestsPerSession = maxNumberOfRequestsPerSession;
 
             config.Configurer.RegisterSingleton<IDocumentStore>(store);
 
@@ -127,7 +162,7 @@ namespace NServiceBus
             return config;
         }
 
-        [ObsoleteEx(Replacement ="This can be removed when we drop support for Raven 616",RemoveInVersion = "5.0")]
+        [ObsoleteEx(Message ="This can be removed when we drop support for Raven 616.", RemoveInVersion = "5.0")]
         static void EnsureDatabaseExists(DocumentStore store)
         {
             if (!AutoCreateDatabase)
@@ -144,14 +179,22 @@ namespace NServiceBus
                 //and the turn the compression off
                 dummyStore.JsonRequestFactory.DisableRequestCompression = !enableRequestCompression;
 
-                //and then make sure that the database the user asked for is created
-                dummyStore.DatabaseCommands.EnsureDatabaseExists(store.DefaultDatabase);
+                try
+                {
+                    //and then make sure that the database the user asked for is created
+                    dummyStore.DatabaseCommands.EnsureDatabaseExists(store.DefaultDatabase);    
+                }
+                catch (System.Net.WebException)
+                {
+                    //Ignore since this could be running as part of an install
+                }
             }
         }
 
         public static Configure DisableRavenInstall(this Configure config)
         {
             ravenInstallEnabled = false;
+            AutoCreateDatabase = false;
 
             return config;
         }
@@ -163,7 +206,7 @@ namespace NServiceBus
             return config;
         }
 
-        [ObsoleteEx(Replacement = "RequestCompression will be on by default in NServiceBus 5.0",TreatAsErrorFromVersion = "5.0",RemoveInVersion = "6.0")]
+        [ObsoleteEx(Message = "RequestCompression will be on by default in NServiceBus 5.0.", TreatAsErrorFromVersion = "5.0", RemoveInVersion = "6.0")]
         public static Configure EnableRequestCompression(this Configure config)
         {
             enableRequestCompression = true;

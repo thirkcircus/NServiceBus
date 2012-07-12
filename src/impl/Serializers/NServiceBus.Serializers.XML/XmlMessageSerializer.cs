@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -328,7 +327,7 @@ namespace NServiceBus.Serializers.XML
                 string prefix = node.Name.Substring(0, colonIndex);
                 string ns = prefixesToNamespaces[prefix];
 
-                typeName = ns.Substring(nameSpace.LastIndexOf("/") + 1) + "." + name;
+                typeName = ns.Substring(ns.LastIndexOf("/") + 1) + "." + name;
             }
 
             if (name.Contains("NServiceBus."))
@@ -605,14 +604,20 @@ namespace NServiceBus.Serializers.XML
 
                 foreach (XmlNode xn in n.ChildNodes) // go over KeyValuePairs
                 {
+                    if (xn.NodeType == XmlNodeType.Whitespace)
+                        continue;
+
                     object key = null;
                     object value = null;
 
                     foreach (XmlNode node in xn.ChildNodes)
                     {
-                        if (node.Name == "Key")
+                        if (node.NodeType == XmlNodeType.Whitespace)
+                            continue;
+
+                        if (node.Name.ToLowerInvariant() == "key")
                             key = GetObjectOfTypeFromNode(keyType, node);
-                        if (node.Name == "Value")
+                        if (node.Name.ToLowerInvariant() == "value")
                             value = GetObjectOfTypeFromNode(valueType, node);
                     }
 

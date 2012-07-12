@@ -25,6 +25,7 @@ namespace NServiceBus.Unicast.Queuing.Azure.ServiceBus
         public const bool DefaultEnableBatchedOperations = false;
         public const bool DefaultQueuePerInstance = false;
         public const int DefaultBackoffTimeInSeconds = 10;
+        public const int DefaultServerWaitTime = 30;
         
         private bool useTransactions;
         private QueueClient queueClient;
@@ -39,6 +40,7 @@ namespace NServiceBus.Unicast.Queuing.Azure.ServiceBus
         public TimeSpan DuplicateDetectionHistoryTimeWindow { get; set; }
         public int MaxDeliveryCount { get; set; }
         public bool EnableBatchedOperations { get; set; }
+        public int ServerWaitTime { get; set; }
 
         public MessagingFactory Factory { get; set; }
         public NamespaceManager NamespaceClient { get; set; }
@@ -85,38 +87,37 @@ namespace NServiceBus.Unicast.Queuing.Azure.ServiceBus
 
         public TransportMessage Receive()
         {
-            BrokeredMessage message = null;
-
             try{
-                message= queueClient.Receive(TimeSpan.FromSeconds(30));
+               var message = queueClient.Receive(TimeSpan.FromSeconds(ServerWaitTime));
+
+                if (message != null)
+                {
+                    var rawMessage = message.GetBody<byte[]>();
+                    var t = DeserializeMessage(rawMessage);
+
+                    if (!useTransactions || Transaction.Current == null)
+                    {
+                        using (message)
+                        {
+                            message.SafeComplete();
+                        }
+                    }
+                    else
+                        Transaction.Current.EnlistVolatile(new ReceiveResourceManager(message), EnlistmentOptions.None);
+
+                    return t;
+                }
             }
             // back off when we're being throttled
             catch (ServerBusyException)
             {
                 Thread.Sleep(TimeSpan.FromSeconds(DefaultBackoffTimeInSeconds)); 
             }
-
-            if(message != null)
+            catch(TimeoutException)
             {
-                var rawMessage = message.GetBody<byte[]>();
-                var t = DeserializeMessage(rawMessage);
-
-                if (!useTransactions || Transaction.Current == null)
-                {
-                    try
-                    {
-                        message.Complete();
-                    }
-                    catch (MessageLockLostException)
-                    {
-                        // message has been completed by another thread or worker
-                    }
-                }
-                else
-                    Transaction.Current.EnlistVolatile(new ReceiveResourceManager(message), EnlistmentOptions.None);
-
-                return t;
+                return null;
             }
+          
             return null;
         }
 
@@ -236,13 +237,15 @@ namespace NServiceBus.Unicast.Queuing.Azure.ServiceBus
             {
                 try
                 {
-                    var brokeredMessage = new BrokeredMessage(rawMessage);
+                    using (var brokeredMessage = new BrokeredMessage(rawMessage))
+                    {
 
-                    sender.Send(brokeredMessage);
+                        sender.Send(brokeredMessage);
 
-                    sent = true;
+                        sent = true;
+                    }
                 }
-                // back off when we're being throttled
+                    // back off when we're being throttled
                 catch (ServerBusyException)
                 {
                     numRetries++;
@@ -275,5 +278,59 @@ namespace NServiceBus.Unicast.Queuing.Azure.ServiceBus
         }
 
         private const string Idforcorrelation = "CorrId";
+    }
+
+    public static class BrokeredMessageExtensions
+    {
+        public static bool SafeComplete(this BrokeredMessage msg)
+        {
+            try
+            {
+                msg.Complete();
+
+                return true;
+            }
+            catch (MessageLockLostException)
+            {
+                // It's too late to compensate the loss of a message lock. We should just ignore it so that it does not break the receive loop.
+            }
+            catch (MessagingException)
+            {
+                // There is nothing we can do as the connection may have been lost, or the underlying queue may have been removed.
+                // If Abandon() fails with this exception, the only recourse is to receive another message.
+            }
+            catch (ObjectDisposedException)
+            {
+                // There is nothing we can do as the object has already been disposed elsewhere
+            }
+
+            return false;
+        }
+
+        public static bool SafeAbandon(this BrokeredMessage msg)
+        {
+            try
+            {
+                msg.Abandon();
+
+                return true;
+            }
+            catch (MessageLockLostException)
+            {
+                // It's too late to compensate the loss of a message lock. We should just ignore it so that it does not break the receive loop.
+            }
+            catch (MessagingException)
+            {
+                // There is nothing we can do as the connection may have been lost, or the underlying queue may have been removed.
+                // If Abandon() fails with this exception, the only recourse is to receive another message.
+            }
+            catch (ObjectDisposedException)
+            {
+                // There is nothing we can do as the object has already been disposed elsewhere
+            }
+
+
+            return false;
+        }
     }
 }

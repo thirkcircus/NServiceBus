@@ -140,7 +140,7 @@ task TestMain -depends CompileMain -description "Builds NServiceBus.dll, keeps t
 
 task CompileCore -depends InitEnvironment -description "Builds NServiceBus.Core.dll and keeps the output in \binaries" { 
 
-$coreDirs = "logging", "unicastTransport", "ObjectBuilder", "config", "faults", "utils", "messageInterfaces", "impl\messageInterfaces", "config", "logging.config",  "Impl\ObjectBuilder.Common", "installation", "encryption", "unitofwork", "masterNode", "impl\installation", "impl\unicast\NServiceBus.Unicast.Msmq", "impl\Serializers", "impl\licensing", "unicast", "headers", "impersonation", "impl\unicast\queuing", "impl\unicast\transport", "impl\unicast\NServiceBus.Unicast.Subscriptions.Msmq", "impl\unicast\NServiceBus.Unicast.Subscriptions.InMemory", "impl\faults", "impl\encryption", "databus", "impl\Sagas", "impl\SagaPersisters\InMemory", "impl\SagaPersisters\RavenSagaPersister", "impl\unicast\NServiceBus.Unicast.Subscriptions.Raven", "integration", "impl\databus", "distributor", "gateway", "scheduling", "satellites", "management\retries", "timeout", "Notifications"
+$coreDirs = "logging", "unicastTransport", "ObjectBuilder", "config", "faults", "utils", "messageInterfaces", "impl\messageInterfaces", "config", "logging.config",  "Impl\ObjectBuilder.Common", "installation", "encryption", "unitofwork", "masterNode", "impl\installation", "impl\unicast\NServiceBus.Unicast.Msmq", "impl\Serializers", "impl\licensing", "unicast", "headers", "impersonation", "impl\unicast\transport", "impl\unicast\queuing", "impl\unicast\NServiceBus.Unicast.Subscriptions.Msmq", "impl\unicast\NServiceBus.Unicast.Subscriptions.InMemory", "impl\faults", "impl\encryption", "databus", "impl\Sagas", "impl\SagaPersisters\InMemory", "impl\SagaPersisters\RavenSagaPersister", "impl\unicast\NServiceBus.Unicast.Subscriptions.Raven", "integration", "impl\databus", "distributor", "gateway", "scheduling", "satellites", "management\retries", "timeout", "Notifications"
 	$coreDirs | % {
 		$solutionDir = Resolve-Path "$srcDir\$_"
 		cd 	$solutionDir
@@ -740,7 +740,7 @@ task CreatePackages {
 	#region Packing NServiceBus.CastleWindsor
 	$packageName = "NServiceBus.CastleWindsor" + $PackageNameSuffix
 	$packit.package_description = "The CastleWindsor Container for the nservicebus"
-	invoke-packit $packageName $script:packageVersion @{"Castle.Core"="3.0.0.2001";"Castle.Windsor"="3.0.0.2001"} "" @{".\release\net40\binaries\containers\castle\*.*"="lib\net40"}
+	invoke-packit $packageName $script:packageVersion @{"Castle.Windsor"="3.0.0.2001"} "" @{".\release\net40\binaries\containers\castle\*.*"="lib\net40"}
 	#endregion
 	
 	#region Packing NServiceBus.StructureMap
@@ -752,7 +752,7 @@ task CreatePackages {
 	#region Packing NServiceBus.Unity
 	$packageName = "NServiceBus.Unity" + $PackageNameSuffix
 	$packit.package_description = "The Unity Container for the nservicebus"
-	invoke-packit $packageName $script:packageVersion @{"CommonServiceLocator"="1.0";"Unity"="2.1.505.0";"Unity.Interception"="2.1.505.0"} "" @{".\release\net40\binaries\containers\Unity\*.*"="lib\net40"}
+	invoke-packit $packageName $script:packageVersion @{"Unity"="2.1.505.0";"Unity.Interception"="2.1.505.0"} "" @{".\release\net40\binaries\containers\Unity\*.*"="lib\net40"}
 	#endregion
 	
 	#region Packing NServiceBus.Ninject
@@ -764,19 +764,19 @@ task CreatePackages {
 	#region Packing NServiceBus.Spring
 	$packageName = "NServiceBus.Spring" + $PackageNameSuffix
 	$packit.package_description = "The Spring Container for the nservicebus"
-	invoke-packit $packageName $script:packageVersion @{"Common.Logging"="2.0.0";"Spring.Core"="1.3.2"} "" @{".\release\net40\binaries\containers\spring\*.*"="lib\net40"}
+	invoke-packit $packageName $script:packageVersion @{"Spring.Core"="1.3.2"} "" @{".\release\net40\binaries\containers\spring\*.*"="lib\net40"}
 	#endregion	
 	
 	#region Packing NServiceBus.NHibernate
 	$packageNameNHibernate = "NServiceBus.NHibernate" + $PackageNameSuffix
 	$packit.package_description = "The NHibernate for the NServicebus"
-	invoke-packit $packageNameNHibernate $script:packageVersion @{"Iesi.Collections"="3.2.0.4000";"NHibernate"="3.3.1.4000"} "binaries\NServiceBus.NHibernate.dll"
+	invoke-packit $packageNameNHibernate $script:packageVersion @{"NHibernate"="3.3.1.4000"} "binaries\NServiceBus.NHibernate.dll"
 	#endregion	
 		
 	#region Packing NServiceBus.Azure
 	$packageNameAzure = "NServiceBus.Azure" + $PackageNameSuffix
 	$packit.package_description = "Azure support for NServicebus"
-	invoke-packit $packageNameAzure $script:packageVersion @{$packageNameNsb=$script:packageVersion; $packageNameNHibernate=$script:packageVersion; "Common.Logging"="2.0.0";"Newtonsoft.Json"="4.0.5" } "binaries\NServiceBus.Azure.dll", 
+	invoke-packit $packageNameAzure $script:packageVersion @{$packageNameNsb=$script:packageVersion; $packageNameNHibernate=$script:packageVersion; "Common.Logging"="2.0.0";"Newtonsoft.Json"="4.0.5";"WindowsAzure.Storage"="1.7.0.0" } "binaries\NServiceBus.Azure.dll", 
 	"..\..\lib\azure\Microsoft.WindowsAzure.Diagnostics.dll", "..\..\lib\azure\Microsoft.WindowsAzure.ServiceRuntime.dll", "..\..\lib\azure\Microsoft.ServiceBus.dll","..\..\lib\NHibernate.Drivers.Azure.TableStorage.dll","..\..\lib\Ionic.Zip.dll" 
 	#endregion	
 	
