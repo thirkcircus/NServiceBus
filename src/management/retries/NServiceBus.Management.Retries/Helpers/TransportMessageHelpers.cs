@@ -1,12 +1,13 @@
 ﻿using System;
-using NServiceBus.Unicast.Transport;
-using NServiceBus.Utils;
+
 
 namespace NServiceBus.Management.Retries.Helpers
 {
+    using Unicast.Queuing.Msmq;
+
     public static class TransportMessageHelpers
     {
-        public static Address GetReplyToAddress(TransportMessage message)
+        public static Address GetAddressOfFaultingEndpoint(TransportMessage message)
         {
             var failedQ = GetHeader(message, Faults.FaultsHeaderKeys.FailedQ);
 
@@ -48,7 +49,7 @@ namespace NServiceBus.Management.Retries.Helpers
         public static int GetNumberOfRetries(TransportMessage message)
         {
             string value;
-            if (message.Headers.TryGetValue(SecondLevelRetriesHeaders.Retries, out value))
+            if (message.Headers.TryGetValue(Headers.Retries, out value))
             {
                 int i;
                 if (int.TryParse(value, out i))
@@ -57,20 +58,6 @@ namespace NServiceBus.Management.Retries.Helpers
                 }
             }
             return 0;
-        }
-
-        public static Address GetOriginalReplyToAddressAndRemoveItFromHeaders(TransportMessage message)
-        {
-            var originalReplyToAddress = GetHeader(message, SecondLevelRetriesHeaders.OriginalReplyToAddress);
-
-            if (originalReplyToAddress == null)
-            {
-                return message.ReplyToAddress;
-            }
-
-            SetHeader(message, SecondLevelRetriesHeaders.OriginalReplyToAddress, null);
-
-            return Address.Parse(originalReplyToAddress);
         }
     }
 }

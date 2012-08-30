@@ -128,7 +128,7 @@ namespace NServiceBus.Unicast.Transport.Transactional
         /// <summary>
         /// If set to true the transaction scope will be suppressed to avoid the use of DTC
         /// </summary>
-        public bool SupressDTC { get; set; }
+        public bool SuppressDTC { get; set; }
 
         private int numberOfWorkerThreads = 1;
 
@@ -217,8 +217,8 @@ namespace NServiceBus.Unicast.Transport.Transactional
         /// </remarks>
         private void Process()
         {
-            if (!HasMessage())
-                return;
+            if (throttlingMilliseconds > 0)
+                Thread.Sleep(throttlingMilliseconds);
 
             _needToAbort = false;
             _messageId = string.Empty;
@@ -265,7 +265,7 @@ namespace NServiceBus.Unicast.Transport.Transactional
             if (m == null)
                 return;
 
-            if(SupressDTC)
+            if(SuppressDTC)
             {
                 using(new TransactionScope(TransactionScopeOption.Suppress))
                     ProcessMessage(m);
@@ -388,27 +388,6 @@ namespace NServiceBus.Unicast.Transport.Transactional
             finally
             {
                 failuresPerMessageLocker.ExitWriteLock();
-            }
-        }
-
-        [DebuggerNonUserCode] // so that exceptions don't interfere with debugging.
-        private bool HasMessage()
-        {
-            try
-            {
-                if (throttlingMilliseconds > 0)
-                    Thread.Sleep(throttlingMilliseconds);
-                return MessageReceiver.HasMessage();
-            }
-            catch (InvalidOperationException)
-            {
-                Configure.Instance.OnCriticalError();
-                return false;
-            }
-            catch (Exception e)
-            {
-                Logger.Error("Error in peeking a message from receiver.", e);
-                return false;
             }
         }
 

@@ -1,14 +1,14 @@
-﻿using System;
-using System.Linq;
-
-namespace TimeoutMigrator
+﻿namespace TimeoutMigrator
 {
+    using System;
+    using System.Linq;
     using System.Collections.Generic;
     using System.Messaging;
     using System.Transactions;
     using NServiceBus;
+    using NServiceBus.Config;
     using NServiceBus.Saga;
-    using NServiceBus.Utils;
+    using NServiceBus.Unicast.Queuing.Msmq;
 
     class Program
     {

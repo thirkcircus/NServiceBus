@@ -9,6 +9,7 @@
     using Serializers.Binary;
     using Serialization;
     using Serializers.Json;
+    using Transport;
 
     public class SqlServerMessageQueue : ISendMessages, IReceiveMessages
     {
@@ -28,14 +29,14 @@
                                      SELECT @NextId";
 
         public void Send(TransportMessage message, Address address)
-        {                                   
-            string body;            
+        {
+            string body = string.Empty;          
             
             if (MessageSerializer is MessageSerializer)
             {
                 body = Convert.ToBase64String(message.Body);
             }
-            else
+            else if (message.Body != null)
             {
                 var stream = new MemoryStream(message.Body) {Position = 0};
                 using (TextReader textReader = new StreamReader(stream))
@@ -51,8 +52,11 @@
                 using (var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text })
                 {
                     command.Parameters.Add("IdForCorrelation", SqlDbType.VarChar).Value = GetValue(message.IdForCorrelation);
-                    command.Parameters.Add("CorrelationId", SqlDbType.VarChar).Value = GetValue(message.CorrelationId); 
-	                command.Parameters.AddWithValue("ReplyToAddress", message.ReplyToAddress.ToString()); 
+                    command.Parameters.Add("CorrelationId", SqlDbType.VarChar).Value = GetValue(message.CorrelationId);
+                    if (message.ReplyToAddress == null) // Sendonly endpoint
+                        command.Parameters.AddWithValue("ReplyToAddress", string.Empty); 
+                    else
+                        command.Parameters.AddWithValue("ReplyToAddress", message.ReplyToAddress.ToString()); 
 	                command.Parameters.AddWithValue("Recoverable", message.Recoverable); 
 	                command.Parameters.AddWithValue("MessageIntent", message.MessageIntent.ToString()); 
                     command.Parameters.Add("TimeToBeReceived", SqlDbType.BigInt).Value = message.TimeToBeReceived.Ticks;
@@ -77,20 +81,9 @@
             currentEndpointName = address.ToString();
         }
 
-        private string SQL_PEEK = @"SELECT TOP 1 Id
-	                                FROM [{0}] WITH (UPDLOCK, READPAST)	                                      
-	                                ORDER BY TimeStamp ASC";
-        public bool HasMessage()
-        {            
-            using (var connection = new SqlConnection(ConnectionString))
-            {
-                var sql = string.Format(SQL_PEEK, currentEndpointName);
-                connection.Open();
-                using (var command = new SqlCommand(sql, connection) { CommandType = CommandType.Text })
-                {                                                                            
-                    return command.ExecuteScalar() != null;                    
-                }
-            }        
+        bool IReceiveMessages.HasMessage()
+        {
+            return true;
         }
 
         private string SQL_RECEIVE = @" declare @NextId [uniqueidentifier]                                        
@@ -162,7 +155,8 @@
                                 Headers = headers,
                                 Body = body
                             };
-
+                            
+                            message.IdForCorrelation = message.GetIdForCorrelation();
                             return message;
                         }
                     }

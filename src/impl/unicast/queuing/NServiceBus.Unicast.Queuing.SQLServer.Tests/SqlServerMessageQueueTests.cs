@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using NServiceBus.MessageInterfaces.MessageMapper.Reflection;
-using NServiceBus.Serializers.Binary;
 using NServiceBus.Serializers.XML;
 using NUnit.Framework;
+using NServiceBus.Config;
 
 namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
 {
@@ -15,8 +15,6 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
         private SqlServerMessageQueue _mq;
         private XmlMessageSerializer _xmlMessageSerializer;
         private MessageMapper _messageMapper;
-        private MessageSerializer _binMessageSerializer;
-        private SimpleMessageMapper _simpleMessageMapper;
 
         private const string ConStr = "Server=MIKNOR8540WW7\\sqlexpress;Database=NSB;Trusted_Connection=True;";
 
@@ -24,9 +22,6 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
         public void SetUp()
         {
             var listOfTypes = new List<Type> {typeof (object)};
-
-            _simpleMessageMapper = new SimpleMessageMapper();
-            _binMessageSerializer = new MessageSerializer();            
 
             _messageMapper = new MessageMapper();
             _messageMapper.Initialize(listOfTypes);
@@ -41,7 +36,7 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
                       };
 
             var creator = new SqlServerQueueCreator {ConnectionString = ConStr};
-            creator.CreateQueueIfNecessary(_address, "test", ConfigureVolatileQueues.IsVolatileQueues);
+            creator.CreateQueueIfNecessary(_address, "test");
         }
 
         private readonly Address _address = new Address("send", "testhost");
@@ -59,13 +54,6 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
         }
 
         [Test]
-        public void HasMessage()
-        {
-            Init();
-            _mq.HasMessage();
-        }
-
-        [Test]
         public void Receive()
         {
             Init();
@@ -80,11 +68,8 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
 
             Init();
             Send();
-            if (_mq.HasMessage())
-            {
-                _mq.Receive();
-                received = true;
-            }
+            _mq.Receive();
+            received = true;
             Assert.That(received, Is.True);
         }
 
@@ -118,10 +103,7 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
         {
             Init();
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            while (_mq.HasMessage())                                       
-            {
                 _mq.Receive();
-            }
             stopwatch.Stop();
             Console.WriteLine("stopwatch: " + stopwatch.Elapsed);
         }
@@ -160,7 +142,7 @@ namespace NServiceBus.Unicast.Queuing.SQLServer.Tests
             for (int i = 0; i < threads.Length; i++ )
             {
                 bool more = moreMessages;
-                threads[i] = new Thread(x => { while (more && _mq.HasMessage()) { moreMessages = _mq.Receive() != null; } });
+                threads[i] = new Thread(x => { while (more) { moreMessages = _mq.Receive() != null; } });
             }
            
             foreach (var thread in threads)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -413,22 +413,7 @@ namespace NServiceBus
                 yield return a;
         }
 
-        /// <summary>
-        /// Initialized the bus in send only mode
-        /// </summary>
-        /// <returns></returns>
-        public IBus SendOnly()
-        {
-            SendOnlyMode = true;
-            Initialize();
-
-            return Builder.Build<IBus>();
-        }
-
-        /// <summary>
-        /// True if this endpoint is operating in send only mode
-        /// </summary>
-        public static bool SendOnlyMode { get; private set; }
+        
 
         /// <summary>
         /// The name of this endpoint
@@ -441,7 +426,12 @@ namespace NServiceBus
         /// <summary>
         /// The function used to get the name of this endpoint
         /// </summary>
-        public static Func<string> GetEndpointNameAction = () => DefaultEndpointName.Get();
+        public static Func<string> GetEndpointNameAction = () => EndpointHelper.GetDefaultEndpointName();
+
+        /// <summary>
+        /// The function used to get the version of this endpoint
+        /// </summary>
+        public static Func<string> DefineEndpointVersionRetriever = () => EndpointHelper.GetEndpointVersion();
 
         private static IEnumerable<Type> GetAllowedTypes(params Assembly[] assemblies)
         {

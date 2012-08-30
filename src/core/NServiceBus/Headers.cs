@@ -43,6 +43,12 @@
         public const string Expire = "NServiceBus.Timeout.Expire";
 
         /// <summary>
+        /// Header for redirecting the expired timeout to a endpoint other than the one setting the Timeout
+        /// This header is considered an applicative header.
+        /// </summary>
+        public const string RouteExpiredTimeoutTo = "NServiceBus.Timeout.RouteExpiredTimeoutTo";
+
+        /// <summary>
         /// Header containing the id of the saga instance the sent the message
         /// This header is considered an applicative header.
         /// </summary>
@@ -100,5 +106,10 @@
         /// Type of the saga that sent this message
         /// </summary>
         public const string OriginatingSagaType = "NServiceBus.OriginatingSagaType";
+
+        /// <summary>
+        /// The number of retries that has been performed for this message
+        /// </summary>
+        public const string Retries = "NServiceBus.Retries";
     }
 }

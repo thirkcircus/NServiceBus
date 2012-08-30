@@ -23,6 +23,7 @@ namespace NServiceBus.Unicast
 {
     using System.Diagnostics;
     using System.Threading.Tasks;
+    using Config;
 
     /// <summary>
     /// A unicast implementation of <see cref="IBus"/> for NServiceBus.
@@ -495,6 +496,8 @@ namespace NServiceBus.Unicast
         void IBus.Reply(params object[] messages)
         {
             MessagingBestPractices.AssertIsValidForReply(messages.ToList());
+            if (_messageBeingHandled.ReplyToAddress == null)
+                throw new InvalidOperationException("Reply was called with null reply-to-address field. It can happen if you are using a SendOnly client. See http://nservicebus.com/OnewaySendonlyendpoints.aspx");
             SendMessage(_messageBeingHandled.ReplyToAddress, _messageBeingHandled.IdForCorrelation, MessageIntentEnum.Send, messages);
         }
 
@@ -505,6 +508,9 @@ namespace NServiceBus.Unicast
 
         void IBus.Return<T>(T errorCode)
         {
+            if (_messageBeingHandled.ReplyToAddress == null)
+                throw new InvalidOperationException("Return was called with null reply-to-address field. It can happen if you are using a SendOnly client. See http://nservicebus.com/OnewaySendonlyendpoints.aspx");
+
             var returnMessage = ControlMessage.Create();
 
             returnMessage.Headers[Headers.ReturnMessageErrorCodeHeader] = errorCode.GetHashCode().ToString();
@@ -512,7 +518,6 @@ namespace NServiceBus.Unicast
             returnMessage.MessageIntent = MessageIntentEnum.Send;
 
             InvokeOutgoingTransportMessagesMutators(new object[] { }, returnMessage);
-
             MessageSender.Send(returnMessage, _messageBeingHandled.ReplyToAddress);
         }
 
@@ -629,15 +634,25 @@ namespace NServiceBus.Unicast
         /// <returns></returns>
         public ICallback Defer(DateTime processAt, params object[] messages)
         {
+            if (processAt.ToUniversalTime() <= DateTime.UtcNow)
+            {
+                return ((IBus) this).SendLocal(messages);
+            }
+
             try
             {
                 messages.First().SetHeader(Headers.Expire, processAt.ToWireFormattedString());
 
+                if (processAt.ToUniversalTime() <= DateTime.UtcNow)
+                {
+                    return ((IBus)this).SendLocal(messages);
+                }
+
                 return ((IBus)this).Send(TimeoutManagerAddress, messages);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Log.Error("It might be that TimeoutManager is not configured. Please configure .RunTimeoutManager() at your endpoint.");
+                Log.Error("It might be that TimeoutManager is not configured. Make sure DisableTimeoutManager was not called at your endpoint.");
                 throw;
             }
         }
@@ -680,12 +695,33 @@ namespace NServiceBus.Unicast
             return null;
         }
 
-        private ICollection<string> SendMessage(IEnumerable<Address> addresses, string correlationId, MessageIntentEnum messageIntent, params object[] messages)
+        private ICollection<string> SendMessage(List<Address> addresses, string correlationId, MessageIntentEnum messageIntent, params object[] messages)
         {
             messages.ToList()
                         .ForEach(message => MessagingBestPractices.AssertIsValidForSend(message.GetType(), messageIntent));
 
-            addresses.ToList()
+            if (messages.Length > 1)
+            {
+                // Users can't send more than one message with a DataBusProperty in the same TransportMessage, Yes this is a bug that will be fixed in v4!
+
+                var numberOfMessagesWithDataBusProperties = 0;
+                foreach (var message in messages)
+                {
+                    var hasAtLeastOneDataBusProperty = message.GetType().GetProperties().Any(p => p.IsDataBusProperty());
+
+                    if (hasAtLeastOneDataBusProperty)
+                    {
+                        numberOfMessagesWithDataBusProperties++;
+                    }
+                }
+
+                if (numberOfMessagesWithDataBusProperties > 1)
+                {
+                    throw new InvalidOperationException("This version of NServiceBus only supports sending up to one message with DataBusProperties per Send().");
+                }
+            }
+
+            addresses
                 .ForEach(address =>
                              {
                                  if (address == Address.Undefined)
@@ -924,7 +960,7 @@ namespace NServiceBus.Unicast
 
         void ValidateConfiguration()
         {
-            if (MessageSerializer == null)
+            if (!SkipDeserialization && MessageSerializer == null)
                 throw new InvalidOperationException("No message serializer has been configured.");
         }
 
@@ -1014,7 +1050,7 @@ namespace NServiceBus.Unicast
         {
             var messages = new object[0];
 
-            if (!m.IsControlMessage())
+            if (!m.IsControlMessage() && !SkipDeserialization)
             {
                 messages = Extract(m);
 
@@ -1181,6 +1217,11 @@ namespace NServiceBus.Unicast
         /// The list of message dispatcher factories to use
         /// </summary>
         public IDictionary<Type, Type> MessageDispatcherMappings { get; set; }
+
+        /// <summary>
+        /// True if no deseralization should be performed. This means that no handlers will be called
+        /// </summary>
+        public bool SkipDeserialization { get; set; }
 
 
         /// <summary>
@@ -1488,7 +1529,8 @@ namespace NServiceBus.Unicast
                                  ReplyToAddress = Address.Local,
                                  TimeToBeReceived = TimeToBeReceivedOnForwardedMessages == TimeSpan.Zero ? m.TimeToBeReceived : TimeToBeReceivedOnForwardedMessages
                              };
-            toSend.Headers["NServiceBus.OriginatingAddress"] = m.ReplyToAddress.ToString();
+            if (m.ReplyToAddress != null)
+                toSend.Headers["NServiceBus.OriginatingAddress"] = m.ReplyToAddress.ToString();
 
             MessageSender.Send(toSend, ForwardReceivedMessagesTo);
         }
@@ -1500,7 +1542,6 @@ namespace NServiceBus.Unicast
         /// <param name="address">The address of the destination the message type is registered to.</param>
         public void RegisterMessageType(Type messageType, Address address)
         {
-
             messageTypeToDestinationLocker.EnterWriteLock();
             messageTypeToDestinationLookup[messageType] = address;
             messageTypeToDestinationLocker.ExitWriteLock();
@@ -1508,13 +1549,20 @@ namespace NServiceBus.Unicast
             if(!string.IsNullOrWhiteSpace(address.Machine))
                 Log.Debug("Message " + messageType.FullName + " has been allocated to endpoint " + address + ".");
 
-            if (messageType.GetCustomAttributes(typeof(ExpressAttribute), true).Length == 0)
+            if (!MessageConventionExtensions.IsExpressMessageType(messageType))
+            {
                 recoverableMessageTypes.Add(messageType);
+            }
 
-            foreach (TimeToBeReceivedAttribute a in messageType.GetCustomAttributes(typeof(TimeToBeReceivedAttribute), true))
-                timeToBeReceivedPerMessageType[messageType] = a.TimeToBeReceived;
+            var timeToBeReceived = MessageConventionExtensions.TimeToBeReceivedAction(messageType);
+
+            if (timeToBeReceived == TimeSpan.MaxValue)
+            {
+                return;
+            }
+
+            timeToBeReceivedPerMessageType[messageType] = timeToBeReceived;
         }
-
 
         /// <summary>
         /// Wraps the provided messages in an NServiceBus envelope, does not include destination.
@@ -1526,7 +1574,9 @@ namespace NServiceBus.Unicast
         protected TransportMessage MapTransportMessageFor(object[] rawMessages, TransportMessage result)
         {
             result.Headers = new Dictionary<string, string>();
-            result.ReplyToAddress = Address.Local;
+            
+            if(!Endpoint.IsSendOnly)
+                result.ReplyToAddress = Address.Local;
 
             var messages = ApplyOutgoingMessageMutatorsTo(rawMessages).ToArray();
 
@@ -1750,8 +1800,7 @@ namespace NServiceBus.Unicast
 
             _messageBeingHandled.Headers["NServiceBus.PipelineInfo." + messageType.FullName] = string.Join(";", handlers.Select(t => t.AssemblyQualifiedName));
         }
-
-
+        
         #endregion
 
         #region Fields

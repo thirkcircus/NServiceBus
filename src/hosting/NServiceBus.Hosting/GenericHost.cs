@@ -11,6 +11,7 @@ using NServiceBus.Logging;
 namespace NServiceBus.Hosting
 {
     using System.Linq;
+    using Config;
     using Installation;
 
     /// <summary>
@@ -28,7 +29,7 @@ namespace NServiceBus.Hosting
                 PerformConfiguration();
 
                 bus = Configure.Instance.CreateBus();
-                if (bus != null)
+                if ((bus != null) && (!Endpoint.IsSendOnly))
                     bus.Start();
 
                 configManager.Startup();
@@ -38,9 +39,8 @@ namespace NServiceBus.Hosting
             {
                 //we log the error here in order to avoid issues with non serializable exceptions
                 //going across the appdomain back to topshelf
-                LogManager.GetLogger(typeof(GenericHost)).Fatal("Exception when starting endpoint", ex);
-
-                throw new Exception("Exception when starting endpoint, error has been logged. Reason: " + ex.Message, ex);
+                LogManager.GetLogger(typeof(GenericHost)).Fatal("Exception when starting endpoint.", ex);
+                Environment.FailFast("Exception when starting endpoint.", ex);
             }
         }
 
@@ -49,12 +49,22 @@ namespace NServiceBus.Hosting
         /// </summary>
         public void Stop()
         {
-            configManager.Shutdown();
-            wcfManager.Shutdown();
-
-            if (bus != null)
+            try
             {
-                bus.Dispose();
+                configManager.Shutdown();
+                wcfManager.Shutdown();
+
+                if (bus != null)
+                {
+                    bus.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                //we log the error here in order to avoid issues with non serializable exceptions
+                //going across the appdomain back to topshelf
+                LogManager.GetLogger(typeof (GenericHost)).Fatal("Exception when stopping endpoint.", ex);
+                Environment.FailFast("Exception when stopping endpoint.", ex);
             }
         }
 
@@ -141,7 +151,7 @@ namespace NServiceBus.Hosting
         {
             this.specifier = specifier;
             Configure.GetEndpointNameAction = () => endpointName;
-
+            Configure.DefineEndpointVersionRetriever = () => FileVersionRetriever.GetFileVersion(specifier.GetType());
             List<Assembly> assembliesToScan;
 
             if (scannableAssembliesFullName == null)

@@ -144,11 +144,11 @@ namespace NServiceBus.Unicast.Config
         IComponentConfig<UnicastBus> busConfig;
 
         /// <summary>
-        /// Setting throttling message receiving rate.
+        /// Setting throttling message receiving rate, per receiving thread, measured in messages per second.
         /// </summary>
         /// <param name="messagesPerSecond"></param>
         /// <returns></returns>
-        public ConfigUnicastBus MaxThroughputPerSecond(int messagesPerSecond)
+        public ConfigUnicastBus DecreaseThroughputTo(int messagesPerSecond)
         {
             var licenseMaxThroughputPerSecond = LicenseConfig.GetMaxThroughputPerSecond();
             if ((licenseMaxThroughputPerSecond == 0) || (messagesPerSecond < licenseMaxThroughputPerSecond))
@@ -157,8 +157,8 @@ namespace NServiceBus.Unicast.Config
                 Logger.InfoFormat("Message receiving throughput was decreased to: [{0}] message per second", messagesPerSecond);
                 return this;
             }
-            
-            Logger.ErrorFormat("Decrease your max message throughput to a value lower than [{0}], which is specified in your license.", licenseMaxThroughputPerSecond);
+
+            Logger.WarnFormat("Attempt to decrease your max message throughput to a value higher than [{0}], which is specified in your license, is not allowed.", licenseMaxThroughputPerSecond);
             return this;
         }
         /// <summary>
@@ -355,6 +355,18 @@ namespace NServiceBus.Unicast.Config
         public ConfigUnicastBus AllowSubscribeToSelf()
         {
             busConfig.ConfigureProperty(b => b.AllowSubscribeToSelf, true);
+            return this;
+        }
+
+        /// <summary>
+        /// Causes the bus to not deserialize incoming messages. This means that no handlers are called and 
+        /// you need to be subscribed to the ITransport.TransportMessageReceived event to handle the messages
+        /// your self.
+        /// </summary>
+        /// <returns></returns>
+        public ConfigUnicastBus SkipDeserialization()
+        {
+            busConfig.ConfigureProperty(b => b.SkipDeserialization, true);
             return this;
         }
 

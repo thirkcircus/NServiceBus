@@ -21,6 +21,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <DocumentationFile>bin\Debug\NServiceBus.Notifications.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -29,6 +30,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <DocumentationFile>bin\Release\NServiceBus.Notifications.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="NServiceBus">
@@ -58,11 +60,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Config\ConfigureNotifications.cs" />
+    <Compile Include="MailMessage.cs" />
     <Compile Include="RegisterSystemMessages.cs" />
     <Compile Include="BusExtensions.cs" />
     <Compile Include="SendEmail.cs" />
     <Compile Include="NotificationSatellite.cs" />
-    <Compile Include="NotifierQueueInstaller.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -3,7 +3,6 @@ using System.Configuration;
 using System.Transactions;
 using NServiceBus.Config;
 using NServiceBus.Logging;
-using NServiceBus.Licensing;
 
 namespace NServiceBus.Unicast.Transport.Transactional.Config
 {
@@ -15,13 +14,13 @@ namespace NServiceBus.Unicast.Transport.Transactional.Config
             var transportConfig = Configure.Instance.Configurer.ConfigureComponent<TransactionalTransport>(
                 DependencyLifecycle.SingleInstance);
 
-            if(IsTransactional)
-                IsTransactional = !ConfigureVolatileQueues.IsVolatileQueues;
+            if (IsTransactional)
+                IsTransactional = !Endpoint.IsVolatile;
             
             transportConfig.ConfigureProperty(t => t.IsTransactional, IsTransactional);
             transportConfig.ConfigureProperty(t => t.IsolationLevel, IsolationLevel);
             transportConfig.ConfigureProperty(t => t.TransactionTimeout, TransactionTimeout);
-            transportConfig.ConfigureProperty(t => t.SupressDTC, SupressDTC);
+            transportConfig.ConfigureProperty(t => t.SuppressDTC, Endpoint.DontUseDistributedTransactions);
 
             var cfg = Configure.GetConfigSection<MsmqTransportConfig>();
 
@@ -54,7 +53,6 @@ namespace NServiceBus.Unicast.Transport.Transactional.Config
         public static bool IsTransactional { get; set; }
         public static IsolationLevel IsolationLevel { get; set; }
         public static TimeSpan TransactionTimeout { get; set; }
-        public static bool SupressDTC { get; set; }
         private static readonly ILog Logger = LogManager.GetLogger(typeof(Bootstrapper).Namespace);
     }
 }

@@ -1,101 +1,36 @@
 ﻿namespace NServiceBus
 {
-    using Raven.Client;
     using Timeout.Core;
     using Timeout.Core.Dispatch;
-    using Timeout.Hosting.Windows.Config;
-    using Timeout.Hosting.Windows.Persistence;
-
-
-    public static class ConfigureTimeoutManager
+    using Unicast.Queuing;
+    using Timeout.Hosting.Windows;
+    
+    public class TimeoutManagerConfiguration : IWantToRunBeforeConfigurationIsFinalized
     {
-        private static bool timeoutManagerEnabled;
-
-        public static bool IsTimeoutManagerEnabled(this Configure config)
+        private static Address timeoutManagerAddress;
+        public ICreateQueues QueueCreator { get; set; }
+        
+        public void Run()
         {
-            return timeoutManagerEnabled;
-        }
-
-        public static Configure RunTimeoutManager(this Configure config)
-        {
-            if(disabledTimeoutManagerCalledExplicitly)
-                return config; 
-            
-            return SetupTimeoutManager(config);
-        }
-
-        public static Configure RunTimeoutManagerWithInMemoryPersistence(this Configure config)
-        {
-            config.Configurer.ConfigureComponent<InMemoryTimeoutPersistence>(DependencyLifecycle.SingleInstance);
-
-            return SetupTimeoutManager(config);
-        }
-
-        private static Configure SetupTimeoutManager(this Configure config)
-        {
-            timeoutManagerEnabled = true;
-
-            TimeoutManagerAddress = config.GetTimeoutManagerAddress();
-
-            config.Configurer.ConfigureComponent<DefaultTimeoutManager>(DependencyLifecycle.SingleInstance);
-            config.Configurer.ConfigureComponent<TimeoutRunner>(DependencyLifecycle.SingleInstance);
-            config.Configurer.ConfigureComponent<TimeoutDispatchHandler>(DependencyLifecycle.InstancePerCall);
-            config.Configurer.ConfigureComponent<TimeoutTransportMessageHandler>(DependencyLifecycle.InstancePerCall);
-            config.Configurer.ConfigureComponent<TimeoutDispatcher>(DependencyLifecycle.InstancePerCall)
+            Configure.Instance.Configurer.ConfigureComponent<DefaultTimeoutManager>(DependencyLifecycle.SingleInstance);
+            Configure.Instance.Configurer.ConfigureComponent<TimeoutRunner>(DependencyLifecycle.SingleInstance);
+            Configure.Instance.Configurer.ConfigureComponent<TimeoutDispatchHandler>(DependencyLifecycle.InstancePerCall);
+            Configure.Instance.Configurer.ConfigureComponent<TimeoutTransportMessageHandler>(DependencyLifecycle.InstancePerCall);
+            Configure.Instance.Configurer.ConfigureComponent<TimeoutDispatcher>(DependencyLifecycle.InstancePerCall)
                 .ConfigureProperty(d => d.TimeoutManagerAddress, TimeoutManagerAddress);
+            Configure.Instance.Configurer.ConfigureComponent<TimeoutMessageProcessor>(DependencyLifecycle.SingleInstance)
+                .ConfigureProperty(mp => mp.InputAddress, TimeoutManagerAddress);
+            
+            if (!Configure.Instance.Configurer.HasComponent<IPersistTimeouts>())
+                ConfigureTimeoutExtensions.DefaultPersistence();
 
-            return config;
         }
-
-        /// <summary>
-        /// Use the in memory timeout persister implementation.
-        /// </summary>
-        /// <param name="config"></param>
-        /// <returns></returns>
-        public static Configure UseInMemoryTimeoutPersister(this Configure config)
+        static Address TimeoutManagerAddress
         {
-            config.Configurer.ConfigureComponent<InMemoryTimeoutPersistence>(DependencyLifecycle.SingleInstance);
-            return config;
+            get
+            {
+                return timeoutManagerAddress ?? (timeoutManagerAddress = Address.Parse(Configure.EndpointName).SubScope("Timeouts"));
+            }
         }
-
-        /// <summary>
-        /// Sets the default persistence to UseInMemoryTimeoutPersister
-        /// </summary>
-        /// <param name="config"></param>
-        /// <returns></returns>
-        public static Configure DefaultToInMemoryTimeoutPersistence(this Configure config)
-        {
-            TimeoutManagerDefaults.DefaultPersistence = () => UseInMemoryTimeoutPersister(config);
-            return config;
-        }
-
-        /// <summary>
-        /// Use the Raven timeout persister implementation.
-        /// </summary>
-        /// <param name="config"></param>
-        /// <returns></returns>
-        public static Configure UseRavenTimeoutPersister(this Configure config)
-        {
-            if (!config.Configurer.HasComponent<IDocumentStore>())
-                config.RavenPersistence();
-                
-            config.Configurer.ConfigureComponent<RavenTimeoutPersistence>(DependencyLifecycle.SingleInstance);
-
-            return config;
-        }
-
-        /// <summary>
-        /// As Timeout manager is turned on by default for server roles, use DisableTimeoutManager method to turn off Timeout manager
-        /// </summary>
-        /// <param name="config"></param>
-        /// <returns></returns>
-        public static bool disabledTimeoutManagerCalledExplicitly;
-        public  static Configure DisableTimeoutManager(this Configure config)
-        {
-            timeoutManagerEnabled = false;
-            disabledTimeoutManagerCalledExplicitly = true;
-            return config;
-        }
-        public static Address TimeoutManagerAddress { get; set; }
     }
 }

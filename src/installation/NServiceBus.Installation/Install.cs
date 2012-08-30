@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Principal;
 using NServiceBus.Installation;
-using NServiceBus.ObjectBuilder;
 
 namespace NServiceBus
 {
@@ -92,7 +91,6 @@ namespace NServiceBus
 
         private static bool installedInfrastructureInstallers = false;
         private static bool installedOthersInstallers = false;
-        private static bool queuesCreated = false;
 
         /// <summary>
         /// Invokes installers for the given environment
@@ -106,19 +104,6 @@ namespace NServiceBus
             
             if(RunOtherInstallers)            
                 InstallOtherInstallers();
-
-            CreateQueues();
-        }
-
-        private void CreateQueues()
-        {
-            if (queuesCreated)
-                return;
-
-            GetInstallers<T>(typeof(IWantQueuesCreated<>))
-                .ForEach(t => ((IWantQueuesCreated)Configure.Instance.Builder.Build(t)).Create(winIdentity));
-
-            queuesCreated = true;
         }
 
         /// <summary>
@@ -144,8 +129,11 @@ namespace NServiceBus
                 return;
 
             GetInstallers<T>(typeof(INeedToInstallSomething<>))
-                .ForEach(t => ((INeedToInstallSomething)Activator.CreateInstance(t)).Install(winIdentity));
-            
+                .ForEach(t => Configure.Instance.Configurer.ConfigureComponent(t,DependencyLifecycle.InstancePerCall));
+
+            Configure.Instance.Builder.BuildAll<INeedToInstallSomething>().ToList()
+                .ForEach(i=>i.Install(winIdentity));
+
             installedOthersInstallers = true;
         }
 

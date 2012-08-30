@@ -92,6 +92,9 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\build\nservicebus.core\NServiceBus.Utils.dll</HintPath>
     </Reference>
+    <Reference Include="Obsolete">
+      <HintPath>..\..\..\packages\Obsolete.Fody.1.0.0.0\Lib\NET40\Obsolete.dll</HintPath>
+    </Reference>
     <Reference Include="Raven.Abstractions">
       <HintPath>..\..\..\packages\RavenDB.Client.1.0.960\lib\net40\Raven.Abstractions.dll</HintPath>
     </Reference>
@@ -112,6 +115,7 @@
     <Reference Include="System.Transactions" />
     <Reference Include="System.Web" />
     <Reference Include="System.Xml" />
+    <None Include="FodyWeavers.xml" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Channels\Channel.cs" />
@@ -121,7 +125,7 @@
     <Compile Include="Config\GatewayBootstrapper.cs" />
     <Compile Include="Config\GatewayConfig.cs" />
     <Compile Include="Config\GatewayDefaults.cs" />
-    <Compile Include="Installation\Installer.cs" />
+    <Compile Include="Installation\GatewayQueueCreator.cs" />
     <Compile Include="Persistence\Raven\GatewayMessage.cs" />
     <Compile Include="Persistence\Raven\RavenDBPersistence.cs" />
     <Compile Include="Receiving\ConfigurationBasedChannelManager.cs" />
@@ -142,13 +146,11 @@
     <Compile Include="Sending\IdempotentChannelForwarder.cs" />
     <Compile Include="Sending\IForwardMessagesToSites.cs" />
     <Compile Include="Routing\Endpoints\DefaultEndpointRouter.cs" />
-    <Compile Include="Routing\Endpoints\LegacyEndpointRouter.cs" />
     <Compile Include="Routing\IRouteMessagesToEndpoints.cs" />
     <Compile Include="Routing\Sites\ConfigurationBasedSiteRouter.cs" />
     <Compile Include="Config\ConfigureGateway.cs" />
     <Compile Include="Routing\IRouteMessagesToSites.cs" />
     <Compile Include="Routing\Sites\KeyPrefixConventionSiteRouter.cs" />
-    <Compile Include="Routing\Sites\LegacySiteRouter.cs" />
     <Compile Include="Routing\Site.cs" />
     <Compile Include="HeaderManagement\GatewayHeaders.cs" />
     <Compile Include="Receiving\GatewayReceiver.cs" />
@@ -181,4 +183,5 @@
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\..\..\tools\Fody\Fody.targets" />
 </Project>

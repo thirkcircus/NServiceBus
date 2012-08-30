@@ -20,7 +20,10 @@
                 sendEmail = (SendEmail)MessageSerializer.Deserialize(stream).First();
 
             using (var c = new SmtpClient())
-                c.Send(sendEmail.Message);
+            using (var mailMessage = sendEmail.Message.ToMailMessage())
+            {
+                c.Send(mailMessage);
+            }
         }
 
         public void Start()
@@ -37,7 +40,7 @@
         {
             get
             {
-                return BusExtensions.NotificationAddess;
+                return BusExtensions.NotificationAddress;
             }
         }
 

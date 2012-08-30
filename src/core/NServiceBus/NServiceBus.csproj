@@ -58,7 +58,7 @@
   <ItemGroup>
     <None Include="packages.config" />
     <Reference Include="Obsolete">
-      <HintPath>..\..\..\packages\Obsolete.Fody.0.8.0.0\Lib\NET40\Obsolete.dll</HintPath>
+      <HintPath>..\..\..\packages\Obsolete.Fody.1.0.0.0\Lib\NET40\Obsolete.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
@@ -72,6 +72,7 @@
     <Compile Include="Address.cs" />
     <Compile Include="AddressMode.cs" />
     <Compile Include="CompletionResult.cs" />
+    <Compile Include="DataBusProperty.cs" />
     <Compile Include="ExtensionMethods.cs" />
     <Compile Include="Headers.cs" />
     <Compile Include="IAuthorizeSubscriptions.cs" />
@@ -86,6 +87,7 @@
     <Compile Include="IMessageHandler.cs" />
     <Compile Include="IMessageModule.cs" />
     <Compile Include="INeedInitialization.cs" />
+    <Compile Include="IMessageSerializer.cs" />
     <Compile Include="ISpecifyMessageHandlerOrdering.cs" />
     <Compile Include="IStartableBus.cs" />
     <Compile Include="IWantToRunWhenBusStartsAndStops.cs" />
