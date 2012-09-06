@@ -8,32 +8,42 @@ namespace MyServer
 {
     public class RequestDataMessageHandler : IHandleMessages<RequestDataMessage>
     {
-        private const int Max = 1000;
-        private static bool first = true;
-        private static readonly Stopwatch sw = new Stopwatch();
-        private static int counter;
-        private static int counter2;
+        const int Max = 1000;
+        static bool first = true;
+        static readonly Stopwatch sw = new Stopwatch();
+        static int counter;
+        static int messageCount;
         public IBus Bus { get; set; }
+        static readonly object myLock = new object();
 
         #region IHandleMessages<RequestDataMessage> Members
-
+        public RequestDataMessageHandler()
+        {
+            //Interlocked.Increment(ref messageCount);
+            //Console.WriteLine("Thread: [{0}] Time to receive: [{1}] messages is: [{2}], message counter is: [{3}]", 
+            //    Thread.CurrentThread.ManagedThreadId, 
+            //    counter, 
+            //    sw.Elapsed.TotalSeconds, 
+            //    messageCount);
+        }
         public void Handle(RequestDataMessage message)
         {
             if (first)
             {
-                lock (typeof(int))
+                lock (myLock)
                 {
                     sw.Start();
                     first = false;
                 }
             }
+            Interlocked.Increment(ref messageCount);
             Interlocked.Increment(ref counter);
-            Interlocked.Increment(ref counter2);
-            lock (typeof(int))
+            
+            lock (myLock)
             {
-                if (counter <= Max) 
+                if (counter < Max) 
                     return;
-                Console.WriteLine("Thread: [{0}] Time to receive: [{1}] messages is: [{2}], message counter is: [{3}]", Thread.CurrentThread.ManagedThreadId, counter, sw.Elapsed.TotalSeconds, counter2);
+                Console.WriteLine("Thread: [{0}] Time to receive: [{1}] messages is: [{2}], message counter is: [{3}]", Thread.CurrentThread.ManagedThreadId, counter, sw.Elapsed.TotalSeconds, messageCount);
                 Interlocked.Exchange(ref counter, 0); 
                 sw.Restart();
             }

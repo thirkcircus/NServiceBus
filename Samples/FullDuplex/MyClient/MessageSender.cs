@@ -26,11 +26,7 @@ namespace MyClient
 
             while (counter < messagesToSend)
             {
-                requestDataMessage[counter] = new RequestDataMessage
-                                                  {
-                                                      DataId = new Guid(),
-                                                      String = counter.ToString(CultureInfo.InvariantCulture)
-                                                  };
+                requestDataMessage[counter] = new RequestDataMessage{DataId = new Guid(),String = counter.ToString(CultureInfo.InvariantCulture)};
                 counter++;
             }
             counter = 0;

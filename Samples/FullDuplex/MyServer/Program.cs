@@ -1,10 +1,11 @@
 ﻿using System;
 using NServiceBus;
 using NServiceBus.Config;
-using NServiceBus.Unicast.Transport.Transactional.Config;
 
 namespace MyServer
 {
+    using NServiceBus.Unicast.Transport.Transactional.Config;
+
     internal class Program
     {
         private static void Main()
@@ -16,9 +17,10 @@ namespace MyServer
                 //.BinarySerializer()
                 //.MsmqTransport()
                 .SqlServerTransport(@"Data Source=localhost\SQLEXPRESS;Initial Catalog=SiteB;Integrated Security=True;")
+                //sTransacional(true)
                 .PurgeOnStartup(false)
                 //.DoNotCreateQueues()
-                //.SuppressDTC()
+                .SuppressDTC()
                 .DisableSecondLevelRetries()
                 .DisableNotifications()
                 .InMemoryFaultManagement()
@@ -26,8 +28,8 @@ namespace MyServer
                 .ImpersonateSender(false)
                 .LoadMessageHandlers()
                 .CreateBus()
-                .Start();
-            //.Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());
+                //.Start();
+            .Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());
 
 
             Console.Read();

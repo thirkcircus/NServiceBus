@@ -1,7 +1,6 @@
 ﻿using System;
 using NServiceBus;
 using NServiceBus.Config;
-using NServiceBus.Unicast.Transport.Transactional.Config;
 
 namespace MyClient
 {
@@ -34,8 +33,8 @@ namespace MyClient
                 .ImpersonateSender(false)
                 .LoadMessageHandlers()
                 .CreateBus()
-                .Start();
-            //.Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());
+                //.Start();
+            .Start(() => Configure.Instance.ForInstallationOn<NServiceBus.Installation.Environments.Windows>().Install());
 
             Console.Read();
         }

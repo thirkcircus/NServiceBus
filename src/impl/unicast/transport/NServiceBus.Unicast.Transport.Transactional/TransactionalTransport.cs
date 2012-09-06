@@ -279,7 +279,7 @@ namespace NServiceBus.Unicast.Transport.Transactional
         void ProcessMessage(TransportMessage m)
         {
             _messageId = m.Id;
-
+            Logger.Debug("Message ID: " + _messageId);
             var exceptionFromStartedMessageHandling = OnStartedMessageProcessing(m);
 
             if (IsTransactional)
