@@ -93,8 +93,7 @@ namespace NServiceBus.ObjectBuilder.Unity
             if (HasComponent(concreteComponent))
                 return;
 
-            IEnumerable<Type> interfaces = GetAllServiceTypesFor(concreteComponent);
-
+            var interfaces = GetAllServiceTypesFor(concreteComponent);
       
             foreach (Type t in interfaces)
             {
@@ -108,7 +107,18 @@ namespace NServiceBus.ObjectBuilder.Unity
                     DefaultInstances.Add(t);
                 }
             }
+        }
 
+        public void Configure<T>(Func<T> componentFactory, DependencyLifecycle dependencyLifecycle)
+        {
+            var componentType = typeof (T);
+
+           if (HasComponent(componentType))
+               return;
+
+            container.RegisterType<T>(GetLifetimeManager(dependencyLifecycle),
+                                      new InjectionFactory(unityContainer => componentFactory()));
+            DefaultInstances.Add(componentType);
         }
 
         public void ConfigureProperty(Type concreteComponent, string property, object value)

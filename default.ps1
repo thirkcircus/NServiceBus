@@ -1,7 +1,7 @@
 properties {
 	$ProductVersion = "3.2"
 	$BuildNumber = "0";
-	$PatchVersion = "0"
+	$PatchVersion = "7"
 	$PreRelease = "-build"	
 	$PackageNameSuffix = ""
 	$TargetFramework = "net-4.0"
@@ -71,7 +71,7 @@ task InitEnvironment -description "Initializes the environment for build" {
 
 	if($script:isEnvironmentInitialized -ne $true){
 		if ($TargetFramework -eq "net-4.0"){
-			$netfxInstallroot ="" 
+			$netfxInstallroot = "" 
 			$netfxInstallroot =	Get-RegistryValue 'HKLM:\SOFTWARE\Microsoft\.NETFramework\' 'InstallRoot' 
 			
 			$netfxCurrent = $netfxInstallroot + "v4.0.30319"
@@ -80,9 +80,22 @@ task InitEnvironment -description "Initializes the environment for build" {
 			
 			echo ".Net 4.0 build requested - $script:msBuild" 
 
-			$script:ilmergeTargetFramework  = "/targetplatform:v4," + $netfxCurrent
+			$script:ilmergeTargetFramework = "/targetplatform:v4," + $netfxCurrent
+
+			$ilMergeTargetFrameworkPath = (get-item 'Env:\ProgramFiles').value + '\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0'
+			if(test-path $ilMergeTargetFrameworkPath) {
+				$script:ilmergeTargetFramework = "/targetplatform:v4," + $ilMergeTargetFrameworkPath		
+			} else {
+				$ilMergeTargetFrameworkPath = (get-item 'Env:\ProgramFiles(x86)').value + '\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0'
+
+				if(test-path $ilMergeTargetFrameworkPath) {
+					$script:ilmergeTargetFramework = "/targetplatform:v4," + $ilMergeTargetFrameworkPath
+				}
+			}
 			
-			$script:msBuildTargetFramework ="/p:TargetFrameworkVersion=v4.0 /ToolsVersion:4.0"
+			echo "ilmergeTargetFramework requested $script:ilmergeTargetFramework"
+
+			$script:msBuildTargetFramework = "/p:TargetFrameworkVersion=v4.0 /ToolsVersion:4.0"
 			
 			$script:nunitTargetFramework = "/framework=4.0";
 			
@@ -172,6 +185,7 @@ $coreDirs = "unicastTransport", "ObjectBuilder", "config", "faults", "utils", "m
 	$assemblies += dir $buildBase\nservicebus.core\NLog.dll
 	$assemblies += dir $buildBase\nservicebus.core\Raven.Abstractions.dll
 	$assemblies += dir $buildBase\nservicebus.core\Raven.Client.Lightweight.dll
+	$assemblies += dir $buildBase\nservicebus.core\AsyncCtpLibrary.dll
 	$assemblies += dir $buildBase\nservicebus.core\rhino.licensing.dll
 	$assemblies += dir $buildBase\nservicebus.core\Newtonsoft.Json.dll
 
@@ -339,7 +353,7 @@ task CompileHosts32  -depends InitEnvironment -description "Builds NServiceBus.H
 	$solutions | % {
 		$solutionFile = $_.FullName
 		
-		exec { &$script:msBuild $solutionFile /p:OutDir="$buildBase\hosting32\" /t:Clean }
+		exec { &$script:msBuild $solutionFile /p:PlatformTarget=x86 /p:OutDir="$buildBase\hosting32\" /p:Configuration=$buildConfiguration /t:Clean }
 		
 		exec { &$script:msBuild $solutionFile /p:PlatformTarget=x86 /p:OutDir="$buildBase\hosting32\" /p:Configuration=$buildConfiguration}
 	}
@@ -621,6 +635,8 @@ task CreatePackages -depends PrepareRelease  -description "After preparing for R
 "
     $installPs1Content = "param(`$installPath, `$toolsPath, `$package, `$project)
 	
+    `$project.Save()
+    
 	`$directoryName  = [system.io.Path]::GetDirectoryName(`$project.FullName)	
 	`$appConfigFile = `$directoryName + `"\App.config`"
 	if((Test-Path -Path `$appConfigFile) -eq `$true){
@@ -643,46 +659,35 @@ task CreatePackages -depends PrepareRelease  -description "After preparing for R
 		}
 	}
 	
-if(`$Host.Version.Major -gt 1)
-{  
 	[xml] `$prjXml = Get-Content `$project.FullName
 	`$proceed = `$true
 	foreach(`$PropertyGroup in `$prjXml.project.ChildNodes)
 	{
-	  
 	  if(`$PropertyGroup.StartAction -ne `$null)
 	  {
 		`$proceed = `$false
 	  }
-	  
 	}
 
 	if (`$proceed -eq `$true){
-		`$propertyGroupElement = `$prjXml.CreateElement(`"PropertyGroup`");
-		`$propertyGroupElement.SetAttribute(`"Condition`", `"'```$(Configuration)|```$(Platform)' == 'Release|AnyCPU'`")
-		`$propertyGroupElement.RemoveAttribute(`"xmlns`")
-		`$startActionElement = `$prjXml.CreateElement(`"StartAction`");
+		`$propertyGroupElement = `$prjXml.CreateElement(`"PropertyGroup`", `$prjXml.Project.GetAttribute(`"xmlns`"));
+		`$startActionElement = `$prjXml.CreateElement(`"StartAction`", `$prjXml.Project.GetAttribute(`"xmlns`"));
 		`$propertyGroupElement.AppendChild(`$startActionElement)
 		`$propertyGroupElement.StartAction = `"Program`"
-		`$startProgramElement = `$prjXml.CreateElement(`"StartProgram`");
+		`$startProgramElement = `$prjXml.CreateElement(`"StartProgram`", `$prjXml.Project.GetAttribute(`"xmlns`"));
 		`$propertyGroupElement.AppendChild(`$startProgramElement)
 		`$propertyGroupElement.StartProgram = `"```$(ProjectDir)```$(OutputPath)NServiceBus.Host.exe`"
 		`$prjXml.project.AppendChild(`$propertyGroupElement);
 		`$writerSettings = new-object System.Xml.XmlWriterSettings
-		`$writerSettings.OmitXmlDeclaration = `$true
-		`$writerSettings.NewLineOnAttributes = `$true
+		`$writerSettings.OmitXmlDeclaration = `$false
+		`$writerSettings.NewLineOnAttributes = `$false
 		`$writerSettings.Indent = `$true
 		`$projectFilePath = Resolve-Path -Path `$project.FullName
 		`$writer = [System.Xml.XmlWriter]::Create(`$projectFilePath, `$writerSettings)
-
 		`$prjXml.WriteTo(`$writer)
 		`$writer.Flush()
 		`$writer.Close()
-	}
-}
-else{
-	echo `"Please use PowerShell V2 for better configuration for the project`"
-} 
+	} 
 "
 	$appConfigTranformFile = "$releaseRoot\content\app.config.transform"
 	$installPs1File = "$releaseRoot\tools\install.ps1"
@@ -779,7 +784,7 @@ else{
 	#region Packing NServiceBus.NHibernate
 	$packageNameNHibernate = "NServiceBus.NHibernate" + $PackageNameSuffix
 	$packit.package_description = "The NHibernate for the NServicebus"
-	invoke-packit $packageNameNHibernate $script:packageVersion @{"Iesi.Collections"="3.2.0.4000";"NHibernate"="3.2.0.4000"} "binaries\NServiceBus.NHibernate.dll"
+	invoke-packit $packageNameNHibernate $script:packageVersion @{"NHibernate"="3.3.0.4000"} "binaries\NServiceBus.NHibernate.dll"
 	#endregion	
 		
 	#region Packing NServiceBus.Azure

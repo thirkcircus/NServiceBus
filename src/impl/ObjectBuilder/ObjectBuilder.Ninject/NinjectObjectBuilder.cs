@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Ninject;
 using Ninject.Activation;
-using Ninject.Activation.Strategies;
 using Ninject.Infrastructure;
 using Ninject.Injection;
 using Ninject.Parameters;
@@ -71,8 +70,6 @@ namespace NServiceBus.ObjectBuilder.Ninject
             this.propertyHeuristic = this.kernel.Get<IObjectBuilderPropertyHeuristic>();
 
             this.AddCustomPropertyInjectionHeuristic();
-
-            this.ReplacePropertyInjectionStrategyWithCustomPropertyInjectionStrategy();
 
             this.kernel.Bind<NinjectChildContainer>().ToSelf().Named("Container").DefinesNamedScope("Container");
         }
@@ -145,6 +142,29 @@ namespace NServiceBus.ObjectBuilder.Ninject
         }
 
         /// <summary>
+        /// Configures the call model of the given component type.
+        /// </summary>
+        /// <typeparam name="T">Type to be configured</typeparam>
+        /// <param name="componentFactory">Factory method that return the type</param>
+        /// <param name="dependencyLifecycle">The desired lifecycle for this type</param>
+        public void Configure<T>(Func<T> componentFactory, DependencyLifecycle dependencyLifecycle)
+        {
+            var componentType = typeof (T);
+
+            if (this.HasComponent(componentType))
+            {
+                return;
+            }
+
+            var instanceScope = this.GetInstanceScopeFrom(dependencyLifecycle);
+
+            var bindingConfigurations = this.BindComponentToMethod(componentFactory, instanceScope, dependencyLifecycle == DependencyLifecycle.InstancePerUnitOfWork);
+            this.AddAliasesOfComponentToBindingConfigurations(componentType, bindingConfigurations);
+
+            this.propertyHeuristic.RegisteredTypes.Add(componentType);
+        }
+
+        /// <summary>
         /// Configures the property.
         /// </summary>
         /// <param name="component">
@@ -182,14 +202,15 @@ namespace NServiceBus.ObjectBuilder.Ninject
         /// </param>
         public void RegisterSingleton(Type lookupType, object instance)
         {
-            if (propertyHeuristic.RegisteredTypes.Contains(lookupType))
+            if (this.propertyHeuristic.RegisteredTypes.Contains(lookupType))
             {
-                kernel.Rebind(lookupType).ToConstant(instance);
+                this.kernel.Rebind(lookupType).ToConstant(instance);
                 return;
             }
-            propertyHeuristic.RegisteredTypes.Add(lookupType);
+
+            this.propertyHeuristic.RegisteredTypes.Add(lookupType);
 			
-            kernel.Bind(lookupType).ToConstant(instance);
+            this.kernel.Bind(lookupType).ToConstant(instance);
         }
 
         /// <summary>
@@ -317,6 +338,22 @@ namespace NServiceBus.ObjectBuilder.Ninject
             else
             {
                 bindingConfigurations.Add(this.kernel.Bind(component).ToSelf().InScope(instanceScope).BindingConfiguration);
+            }            
+
+            return bindingConfigurations;
+        }
+
+        private IEnumerable<IBindingConfiguration> BindComponentToMethod<T>(Func<T> component, Func<IContext, object> instanceScope, bool addChildContainerScope)
+        {
+            var bindingConfigurations = new List<IBindingConfiguration>();
+            if (addChildContainerScope)
+            {
+                bindingConfigurations.Add(this.kernel.Bind<T>().ToMethod(ctx => component.Invoke()).WhenNoAnchestorNamed("Container").InScope(instanceScope).BindingConfiguration);
+                bindingConfigurations.Add(this.kernel.Bind<T>().ToMethod(ctx => component.Invoke()).WhenAnyAnchestorNamed("Container").InNamedScope("Container").BindingConfiguration);
+            }
+            else
+            {
+                bindingConfigurations.Add(this.kernel.Bind<T>().ToMethod(ctx => component.Invoke()).InScope(instanceScope).BindingConfiguration);
             }
 
             return bindingConfigurations;
@@ -340,30 +377,11 @@ namespace NServiceBus.ObjectBuilder.Ninject
         {
             this.kernel.Bind<IContainer>().ToConstant(this).InSingletonScope();
 
-            this.kernel.Bind<NewActivationPropertyInjectStrategy>().ToSelf()
-                .InSingletonScope()
-                .WithPropertyValue("Settings", ctx => ctx.Kernel.Settings);
-
             this.kernel.Bind<IObjectBuilderPropertyHeuristic>().To<ObjectBuilderPropertyHeuristic>()
                 .InSingletonScope()
                 .WithPropertyValue("Settings", ctx => ctx.Kernel.Settings);
 
             this.kernel.Bind<IInjectorFactory>().ToMethod(ctx => ctx.Kernel.Components.Get<IInjectorFactory>());
-        }
-
-        /// <summary>
-        /// Replaces the default property injection strategy with custom property injection strategy.
-        /// </summary>
-        private void ReplacePropertyInjectionStrategyWithCustomPropertyInjectionStrategy()
-        {
-            IList<IActivationStrategy> activationStrategies = this.kernel.Components.Get<IPipeline>().Strategies;
-
-            IList<IActivationStrategy> copiedStrategies = new List<IActivationStrategy>(
-                activationStrategies.Where(strategy => !strategy.GetType().Equals(typeof(PropertyInjectionStrategy)))
-                    .Union(new List<IActivationStrategy> { this.kernel.Get<NewActivationPropertyInjectStrategy>() }));
-
-            activationStrategies.Clear();
-            copiedStrategies.ToList().ForEach(activationStrategies.Add);
         }
     }
 }

@@ -25,7 +25,8 @@ namespace NServiceBus.Unicast.Queuing.Msmq
             var machine = address.Machine;
 
             if (machine.ToLower() != Environment.MachineName.ToLower())
-                throw new InvalidOperationException("Input queue must be on the same machine as this process.");
+                throw new InvalidOperationException(string.Format("Input queue [{0}] must be on the same machine as this process [{1}].",
+                    address, Environment.MachineName.ToLower()));
 
             myQueue = new MessageQueue(MsmqUtilities.GetFullPath(address));
 
@@ -59,15 +60,15 @@ namespace NServiceBus.Unicast.Queuing.Msmq
                 {
                     case MessageQueueErrorCode.AccessDenied:
                         errorMessage = string.Format("Do not have permission to access queue [{0}]. Make sure that the current user [{1}] has permission to Send, Receive, and Peek  from this queue. Exception: [{2}]",
-                            myQueue.QueueName, WindowsIdentity.GetCurrent() != null ? WindowsIdentity.GetCurrent().Name : "unknown user", mqe);
+                            myQueue.FormatName, WindowsIdentity.GetCurrent() != null ? WindowsIdentity.GetCurrent().Name : "unknown user", mqe);
                         break;
                     
                     case MessageQueueErrorCode.QueueNotFound:
-                        errorMessage = string.Format("Queue was not found while peeking queue. Exception: [{0}]", mqe);
+                        errorMessage = string.Format("Queue [{0}] was not found while peeking queue. Exception: [{1}]", myQueue.FormatName, mqe);
                         break;
                     
                     default:
-                        errorMessage = string.Format("Error while while peeking queue: [{0}], exception: [{1}]", myQueue.QueueName, mqe);        
+                        errorMessage = string.Format("Error while while peeking queue: [{0}], exception: [{1}]", myQueue.FormatName, mqe);        
                         break;
                 }
                 Logger.Fatal(errorMessage);
@@ -121,7 +122,7 @@ namespace NServiceBus.Unicast.Queuing.Msmq
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(string.Format("There is a problem with the input queue given: {0}. See the enclosed exception for details.", myQueue.QueueName), ex);
+                throw new InvalidOperationException(string.Format("There is a problem with the input queue: {0}. See the enclosed exception for details.", myQueue.Path), ex);
             }
         }
         

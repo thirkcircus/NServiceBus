@@ -1,14 +1,13 @@
 using System;
-using NServiceBus.ObjectBuilder;
 using NServiceBus.ObjectBuilder.Common;
 using NServiceBus.ObjectBuilder.Spring;
+using NServiceBus.ObjectBuilder.Unity;
 using NUnit.Framework;
+using NServiceBus;
+using NServiceBus.ObjectBuilder.CastleWindsor;
 
 namespace ObjectBuilder.Tests
 {
-    using NServiceBus;
-    using NServiceBus.ObjectBuilder.CastleWindsor;
-
     [TestFixture]
     public class When_building_components : BuilderFixture
     {
@@ -35,6 +34,28 @@ namespace ObjectBuilder.Tests
         }
 
         [Test]
+        public void Lambda_uow_components_should_resolve_from_main_container()
+        {            
+            ForAllBuilders((builder) =>
+               Assert.NotNull(builder.Build(typeof(LambdaComponentUoW))),               
+               typeof(WindsorObjectBuilder));
+        }
+
+        [Test]
+        public void Lambda_singlecall_components_should_yield_unique_instances()
+        {
+            ForAllBuilders((builder) =>
+               Assert.AreNotEqual(builder.Build(typeof(SingleCallLambdaComponent)), builder.Build(typeof(SingleCallLambdaComponent))));
+        }
+
+        [Test]
+        public void Lambda_singleton_components_should_yield_the_same_instance()
+        {
+            ForAllBuilders((builder) =>
+               Assert.AreEqual(builder.Build(typeof(SingletonLambdaComponent)), builder.Build(typeof(SingletonLambdaComponent))));
+        }
+
+        [Test]
         public void Reguesting_an_unregistered_component_should_throw()
         {
 
@@ -58,6 +79,7 @@ namespace ObjectBuilder.Tests
                ,typeof(SpringObjectBuilder));
         }
 
+ 
         protected override Action<IContainer> InitializeBuilder()
         {
             return (config) =>
@@ -65,6 +87,9 @@ namespace ObjectBuilder.Tests
                            config.Configure(typeof(SingletonComponent), DependencyLifecycle.SingleInstance);
                            config.Configure(typeof(SinglecallComponent), DependencyLifecycle.InstancePerCall);
                            config.Configure(typeof(InstancePerUoWComponent), DependencyLifecycle.InstancePerUnitOfWork);
+                           config.Configure(() => new SingletonLambdaComponent(), DependencyLifecycle.SingleInstance);
+                           config.Configure(() => new SingleCallLambdaComponent(), DependencyLifecycle.InstancePerCall);
+                           config.Configure(() => new LambdaComponentUoW(), DependencyLifecycle.InstancePerUnitOfWork);
                        };
         }
 
@@ -78,5 +103,20 @@ namespace ObjectBuilder.Tests
         {
             public SingletonComponent SingletonComponent { get; set; }
         }
+        public class SingletonLambdaComponent { }
+        public class LambdaComponentUoW { }
+        public class SingleCallLambdaComponent { }
+    }
+
+    public class StaticFactory
+    {
+        public ComponentCreatedByFactory Create()
+        {
+            return new ComponentCreatedByFactory();
+        }
+    }
+
+    public class ComponentCreatedByFactory
+    {
     }
 }
