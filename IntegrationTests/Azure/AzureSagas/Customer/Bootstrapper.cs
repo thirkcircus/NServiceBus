@@ -1,7 +1,6 @@
 using Cashier;
 using NServiceBus;
-using NServiceBus.Config;
-using NServiceBus.Timeout.Hosting.Azure;
+using NServiceBus.Features;
 using StructureMap;
 
 namespace Customer
@@ -26,6 +25,7 @@ namespace Customer
         private static void BootstrapNServiceBus()
         {
             Configure.Transactions.Enable();
+            Configure.Features.Disable<AutoSubscribe>();
 
             Configure.With()
                      .Log4Net()
@@ -37,7 +37,6 @@ namespace Customer
                      .UseAzureTimeoutPersister()
 
                      .UnicastBus()
-                     .DoNotAutoSubscribe()
                      .LoadMessageHandlers()
                      .CreateBus()
                      .Start();

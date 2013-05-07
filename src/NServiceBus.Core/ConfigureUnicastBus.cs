@@ -1,11 +1,7 @@
 namespace NServiceBus
 {
-    using System;
     using Config;
-    using Transports;
     using Unicast.Config;
-    using Unicast.Publishing;
-    using Unicast.Subscriptions.MessageDrivenSubscriptions;
 
     /// <summary>
     /// Contains extension methods to NServiceBus.Configure.
@@ -41,7 +37,7 @@ namespace NServiceBus
             {
                 return Address.Parse(unicastConfig.TimeoutManagerAddress);
             }
-                
+
             return config.GetMasterNodeAddress().SubScope("Timeouts");
         }
 
@@ -50,7 +46,7 @@ namespace NServiceBus
 
     class EnsureLoadMessageHandlersWasCalled : INeedInitialization
     {
-        void INeedInitialization.Init()
+        public void Init()
         {
             if (ConfigureUnicastBus.Instance != null)
                 if (!ConfigureUnicastBus.Instance.LoadMessageHandlersCalled)

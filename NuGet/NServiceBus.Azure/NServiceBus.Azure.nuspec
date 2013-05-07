@@ -15,9 +15,10 @@
     <copyright>Copyright 2010-2013 NServiceBus. All rights reserved</copyright>
     <tags>nservicebus servicebus msmq cqrs publish subscribe</tags>
     <dependencies>
-      <dependency id="NServiceBus.NHibernate" version="4.0.0-alpha0" />
-      <dependency id="WindowsAzure.Storage" version="1.7.0.0" />
-      <dependency id="log4net" version="1.2.10" />
+	  <dependency id="NServiceBus" version="4.0.0-alpha0" />
+	  <dependency id="Microsoft.WindowsAzure.ConfigurationManager" version="2.0.0.0" />	  
+	  <dependency id="WindowsAzure.ServiceBus" version="2.0.1.0" />
+      <dependency id="WindowsAzure.Storage" version="2.0.5.1" />
     </dependencies>
   </metadata>
   <files>
@@ -25,6 +26,5 @@
     <file src="\lib\azure\Microsoft.WindowsAzure.Diagnostics.dll" target="lib\net40" />
     <file src="\lib\azure\Microsoft.WindowsAzure.ServiceRuntime.dll" target="lib\net40" />
     <file src="\lib\azure\Microsoft.ServiceBus.dll" target="lib\net40" />
-    <file src="\lib\NHibernate.Drivers.Azure.TableStorage.dll" target="lib\net40" />
   </files>
 </package>

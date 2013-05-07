@@ -2,8 +2,12 @@
 {
     using Transports;
 
-    public class RabbitMQ : ITransportDefinition
+    public class RabbitMQ : TransportDefinition
     {
-         
+        public RabbitMQ()
+        {
+            HasNativePubSubSupport = true;
+            HasSupportForCentralizedPubSub = true;
+        }
     }
 }

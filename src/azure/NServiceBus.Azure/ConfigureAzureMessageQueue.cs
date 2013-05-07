@@ -1,18 +1,20 @@
-using Microsoft.WindowsAzure;
 using Microsoft.WindowsAzure.ServiceRuntime;
-using Microsoft.WindowsAzure.StorageClient;
 using NServiceBus.Config;
 using NServiceBus.Unicast.Queuing.Azure;
 
 namespace NServiceBus
 {
     using Features;
+    using Microsoft.WindowsAzure.Storage;
+    using Microsoft.WindowsAzure.Storage.Queue;
     using Unicast.Publishing;
 
     public static class ConfigureAzureMessageQueue
     {
         public static Configure AzureMessageQueue(this Configure config)
         {
+            AzureStoragePersistence.UseAsDefault();
+
             CloudQueueClient queueClient;
 
             var configSection = Configure.GetConfigSection<AzureQueueConfig>();
@@ -34,7 +36,9 @@ namespace NServiceBus
                 .ConfigureProperty(p=>p.PurgeOnStartup,ConfigurePurging.PurgeRequested);
             config.Configurer.ConfigureComponent<AzureMessageQueueSender>(DependencyLifecycle.InstancePerCall);
             config.Configurer.ConfigureComponent<PollingDequeueStrategy>(DependencyLifecycle.InstancePerCall);
-            config.Configurer.ConfigureComponent<StorageDrivenPublisher>(DependencyLifecycle.InstancePerCall);
+
+            Feature.Enable<MessageDrivenSubscriptions>();
+
 
             if (configSection != null)
             {

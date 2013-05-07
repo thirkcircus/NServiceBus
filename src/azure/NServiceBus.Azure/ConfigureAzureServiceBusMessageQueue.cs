@@ -14,6 +14,8 @@ namespace NServiceBus
 
         public static Configure AzureServiceBusMessageQueue(this Configure config)
         {
+            AzureServiceBusPersistence.UseAsDefault();
+
             var configSection = Configure.GetConfigSection<AzureServiceBusQueueConfig>();
 
             if (configSection == null)
@@ -63,26 +65,6 @@ namespace NServiceBus
             AzureServiceBusMessageQueueIsUsed = true;
 
             return config;
-        }
-    }
-
-    public class SetTenant : IWantToRunWhenBusStartsAndStops
-    {
-        private readonly IBus _bus;
-
-        public SetTenant(IBus bus)
-        {
-            _bus = bus;
-        }
-
-        public void Start()
-        {
-            _bus.OutgoingHeaders["x-messagehandler-tenant"] = "messagehandler";
-        }
-
-        public void Stop()
-        {
-
         }
     }
 }

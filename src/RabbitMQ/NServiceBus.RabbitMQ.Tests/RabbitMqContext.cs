@@ -2,12 +2,12 @@
 {
     using System;
     using System.Collections.Concurrent;
-    using System.Transactions;
     using Config;
+    using EasyNetQ;
     using NServiceBus;
     using NUnit.Framework;
-    using NServiceBus.Transports.RabbitMQ;
-    using Settings;
+    using RabbitMQ;
+    using Routing;
     using global::RabbitMQ.Client;
     using TransactionSettings = Unicast.Transport.TransactionSettings;
 
@@ -28,19 +28,7 @@
                 return;
 
             var connection = connectionManager.GetConnection(ConnectionPurpose.Administration);
-            using (var channel = connection.CreateModel())
-            {
-                try
-                {
-                    channel.ExchangeDelete(exchangeName);
-                }
-                catch (Exception)
-                {
-
-                }
-
-
-            }
+            DeleteExchange(exchangeName);
 
             using (var channel = connection.CreateModel())
             {
@@ -56,41 +44,59 @@
             }
         }
 
+        void DeleteExchange(string exchangeName)
+        {
+            var connection = connectionManager.GetConnection(ConnectionPurpose.Administration);
+            using (var channel = connection.CreateModel())
+            {
+                try
+                {
+                    channel.ExchangeDelete(exchangeName);
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
 
         [SetUp]
         public void SetUp()
         {
+            var routingTopology = new ConventionalRoutingTopology();
             receivedMessages = new BlockingCollection<TransportMessage>();
-            connectionManager = new RabbitMqConnectionManager(new ConnectionFactory { HostName = "localhost" },new ConnectionRetrySettings());
+
+            var config = new ConnectionConfiguration();
+            config.ParseHosts("localhost:5672");
+            
+            var selectionStrategy = new DefaultClusterHostSelectionStrategy<ConnectionFactoryInfo>();
+            var connectionFactory = new ConnectionFactoryWrapper(config, selectionStrategy);
+            connectionManager = new RabbitMqConnectionManager(connectionFactory, config);
 
             unitOfWork = new RabbitMqUnitOfWork { ConnectionManager = connectionManager,UsePublisherConfirms = true,MaxWaitTimeForConfirms = TimeSpan.FromSeconds(10) };
 
-            sender = new RabbitMqMessageSender { UnitOfWork = unitOfWork };
+            sender = new RabbitMqMessageSender { UnitOfWork = unitOfWork, RoutingTopology = routingTopology };
 
-            RoutingKeyBuilder = new RabbitMqRoutingKeyBuilder
-                {
-                    GenerateRoutingKey = DefaultRoutingKeyConvention.GenerateRoutingKey
-                };
 
             dequeueStrategy = new RabbitMqDequeueStrategy { ConnectionManager = connectionManager, PurgeOnStartup = true };
-
+            
             MakeSureQueueExists(MYRECEIVEQUEUE);
 
+            DeleteExchange(MYRECEIVEQUEUE);
             MakeSureExchangeExists(ExchangeNameConvention(Address.Parse(MYRECEIVEQUEUE),null));
+            
+            
 
             MessagePublisher = new RabbitMqMessagePublisher
                 {
                     UnitOfWork = unitOfWork,
-                    ExchangeName = ExchangeNameConvention,
-                    RoutingKeyBuilder = RoutingKeyBuilder
-                    
+                    RoutingTopology = routingTopology
                 };
             subscriptionManager = new RabbitMqSubscriptionManager
             {
                 ConnectionManager = connectionManager,
                 EndpointQueueName = MYRECEIVEQUEUE,
-                ExchangeName = ExchangeNameConvention,
-                RoutingKeyBuilder = RoutingKeyBuilder
+                RoutingTopology = routingTopology
             };
 
             dequeueStrategy.Init(Address.Parse(MYRECEIVEQUEUE), TransactionSettings.Default, (m) =>
@@ -106,11 +112,10 @@
         [TearDown]
         public void TearDown()
         {
-            connectionManager.Dispose();
-
             if (dequeueStrategy != null)
                 dequeueStrategy.Stop();
-
+            
+            connectionManager.Dispose();
         }
 
         protected virtual string ExchangeNameConvention(Address address,Type eventType)
@@ -135,7 +140,6 @@
 
         BlockingCollection<TransportMessage> receivedMessages;
 
-        protected const string PUBLISHERNAME = "publisherendpoint";
         protected const string MYRECEIVEQUEUE = "testreceiver";
         protected RabbitMqDequeueStrategy dequeueStrategy;
         protected RabbitMqConnectionManager connectionManager;
@@ -143,6 +147,5 @@
         protected RabbitMqMessagePublisher MessagePublisher;
         protected RabbitMqSubscriptionManager subscriptionManager;
         protected RabbitMqUnitOfWork unitOfWork;
-        protected RabbitMqRoutingKeyBuilder RoutingKeyBuilder;
     }
 }

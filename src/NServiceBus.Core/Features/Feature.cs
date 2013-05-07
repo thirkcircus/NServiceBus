@@ -25,6 +25,24 @@
             SettingsHolder.Set(featureType.FullName, true);
         }
 
+        // <summary>
+        /// Enables the give feature unless explicitly disabled
+        /// </summary>
+        public static void EnableByDefault<T>() where T : IFeature
+        {
+            EnableByDefault(typeof(T));
+        }
+
+        // <summary>
+        /// Enables the give feature unless explicitly disabled
+        /// </summary>
+        public static void EnableByDefault(Type featureType)
+        {
+            SettingsHolder.SetDefault(featureType.FullName, true);
+        }
+
+
+
         /// <summary>
         /// Turns the given feature off
         /// </summary>
@@ -41,7 +59,13 @@
         {
             SettingsHolder.Set(featureType.FullName, false);
         }
-
+        // <summary>
+        /// Disabled the give feature unless explicitly enabled
+        /// </summary>
+        public static void DisableByDefault(Type featureType)
+        {
+            SettingsHolder.SetDefault(featureType.FullName, false);
+        }
 
         /// <summary>
         /// Returns true if the given feature is enabled

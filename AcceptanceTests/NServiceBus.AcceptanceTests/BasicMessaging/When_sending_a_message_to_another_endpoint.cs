@@ -13,22 +13,24 @@
         [Test]
         public void Should_receive_the_message()
         {
-            Scenario.Define(()=>new Context{Id = Guid.NewGuid()})
+            Scenario.Define(() => new Context { Id = Guid.NewGuid() })
                     .WithEndpoint<Sender>(b => b.Given((bus, context) => bus.Send(new MyMessage { Id = context.Id })))
                     .WithEndpoint<Receiver>()
-                    .Done(c=>c.WasCalled)
+                    .Done(c => c.WasCalled)
                     .Repeat(r =>
                             r
-                                .For<AllTransports>()
-                                .For<AllBuilders>()
-                                .For<AllSerializers>()
-                )
+                               .For<AllTransports>()
+                               .For<AllBuilders>()
+                               .For<AllSerializers>()
+                    )
                     .Should(c =>
                         {
                             Assert.True(c.WasCalled, "The message handler should be called");
                             Assert.AreEqual(1, c.TimesCalled, "The message handler should only be invoked once");
                             Assert.AreEqual(Environment.MachineName, c.ReceivedHeaders[Headers.OriginatingMachine], "The sender should attach the machine name as a header");
                             Assert.True(c.ReceivedHeaders[Headers.OriginatingEndpoint].Contains("Sender"), "The sender should attach its endpoint name as a header");
+                            Assert.AreEqual(Environment.MachineName, c.ReceivedHeaders[Headers.ProcessingMachine], "The receiver should attach the machine name as a header");
+                            Assert.True(c.ReceivedHeaders[Headers.ProcessingEndpoint].Contains("Receiver"), "The receiver should attach its endpoint name as a header");
                         })
                     .Run();
         }
@@ -49,7 +51,7 @@
             public Sender()
             {
                 EndpointSetup<DefaultServer>()
-                    .AddMapping<MyMessage>(typeof (Receiver));
+                    .AddMapping<MyMessage>(typeof(Receiver));
             }
         }
 

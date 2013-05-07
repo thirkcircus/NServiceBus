@@ -11,6 +11,7 @@ namespace NServiceBus
     using Config;
     using Config.ConfigurationSource;
     using Config.Conventions;
+    using Features;
     using Installation;
     using Installation.Environments;
     using Logging;
@@ -153,6 +154,7 @@ namespace NServiceBus
         {
         }
 
+        // ------------  Configuration extentions, please C# give us extention properties to avoid all this ---
         private static Endpoint endpoint;
 
         public static Endpoint Endpoint { get { return endpoint ?? (endpoint = new Endpoint()); } }
@@ -161,9 +163,16 @@ namespace NServiceBus
 
         public static TransactionSettings Transactions { get { return transactionSetting ?? (transactionSetting = new TransactionSettings()); } }
 
-        public static Conventions Conventions { get { return conventions ?? (conventions = new Conventions()); } }
+        public static TransportSettings Transports { get { return transports ?? (transports = new TransportSettings()); } }
 
-        private static Conventions conventions;
+        private static TransportSettings transports;
+
+
+        public static FeatureSettings Features { get { return features ?? (features = new FeatureSettings()); } }
+
+        private static FeatureSettings features;
+
+        // ------------  End Configuration extentions ---
 
         /// <summary>
         /// True if this endpoint is operating in send only mode
@@ -313,11 +322,7 @@ namespace NServiceBus
                 return;
             }
 
-            ForAllTypes<IWantToRunBeforeConfiguration>(t =>
-            {
-                var ini = (IWantToRunBeforeConfiguration)Activator.CreateInstance(t);
-                ini.Init();
-            });
+            ActivateAndInvoke<IWantToRunBeforeConfiguration>(t => t.Init());
 
             beforeConfigurationInitializersCalled = true;
         }
@@ -336,36 +341,18 @@ namespace NServiceBus
 
             InvokeBeforeConfigurationInitializers();
 
-            ForAllTypes<Config.INeedInitialization>(t =>
-            {
-                var ini = (Config.INeedInitialization)Activator.CreateInstance(t);
-                ini.Init();
-            });
+            ActivateAndInvoke<Config.INeedInitialization>(t => t.Init());
 
-            ForAllTypes<INeedInitialization>(t =>
-            {
-                var ini = (INeedInitialization)Activator.CreateInstance(t);
-                ini.Init();
-            });
+            ActivateAndInvoke<INeedInitialization>(t => t.Init());
 
-            ForAllTypes<IWantToRunBeforeConfigurationIsFinalized>(t =>
-            {
-                var ini = (IWantToRunBeforeConfigurationIsFinalized)Activator.CreateInstance(t);
-                ini.Run();
-            });
+            ActivateAndInvoke<IWantToRunBeforeConfigurationIsFinalized>(t => t.Run());
 
-            ForAllTypes<INeedToInstallSomething<Windows>>(
-                t => Instance.Configurer.ConfigureComponent(t, DependencyLifecycle.InstancePerCall));
-
+            ForAllTypes<INeedToInstallSomething<Windows>>(t => Instance.Configurer.ConfigureComponent(t, DependencyLifecycle.InstancePerCall));
 
             //lockdown the settings
             SettingsHolder.PreventChanges();
 
-            ForAllTypes<IFinalizeConfiguration>(t =>
-            {
-                var ini = (IFinalizeConfiguration)Activator.CreateInstance(t);
-                ini.FinalizeConfiguration();
-            });
+            ActivateAndInvoke<IFinalizeConfiguration>(t => t.FinalizeConfiguration());
 
             initialized = true;
 
@@ -375,6 +362,7 @@ namespace NServiceBus
             Builder.BuildAll<IWantToRunWhenConfigurationIsComplete>()
                 .ToList().ForEach(o => o.Run());
         }
+
 
         /// <summary>
         /// Applies the given action to all the scanned types that can be assigned to T 
@@ -485,7 +473,7 @@ namespace NServiceBus
         /// <returns></returns>
         public static IComponentConfig<T> Component<T>(DependencyLifecycle lifecycle)
         {
-            if(Instance == null)
+            if (Instance == null)
                 throw new InvalidOperationException("You need to call Configure.With() before calling Configure.Component<T>()");
 
             return Instance.Configurer.ConfigureComponent<T>(lifecycle);
@@ -506,16 +494,27 @@ namespace NServiceBus
         }
 
         /// <summary>
+        /// Configures the given type with the given lifecycle
+        /// </summary>
+        public static IComponentConfig<T> Component<T>(Func<T> componentFactory, DependencyLifecycle lifecycle)
+        {
+            if (Instance == null)
+                throw new InvalidOperationException("You need to call Configure.With() before calling Configure.Component<T>()");
+
+            return Instance.Configurer.ConfigureComponent<T>(componentFactory, lifecycle);
+        }
+
+        /// <summary>
         /// Returns true if the given component exists in the container
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         public static bool HasComponent<T>()
         {
-            return HasComponent(typeof (T));
+            return HasComponent(typeof(T));
         }
 
-       
+
         /// <summary>
         /// Returns true if the given component exists in the container
         /// </summary>
@@ -585,7 +584,58 @@ namespace NServiceBus
         /// </summary>
         public static Func<FileInfo, Assembly> LoadAssembly = s => Assembly.LoadFrom(s.FullName);
 
-        private static IEnumerable<Assembly> GetAssembliesInDirectoryWithExtension(string path, string extension, Predicate<string> includeAssemblyNames, Predicate<string> excludeAssemblyNames)
+        void ActivateAndInvoke<T>(Action<T> action, TimeSpan? thresholdForWarning = null) where T : class
+        {
+            if (!thresholdForWarning.HasValue)
+                thresholdForWarning = TimeSpan.FromSeconds(5);
+
+            var totalTime = new Stopwatch();
+
+            totalTime.Start();
+
+            var details = new List<Tuple<Type, TimeSpan>>();
+
+            ForAllTypes<T>(t =>
+            {
+                var sw = new Stopwatch();
+
+                sw.Start();
+                var instanceToInvoke = (T)Activator.CreateInstance(t);
+                action(instanceToInvoke);
+                sw.Stop();
+
+                details.Add(new Tuple<Type, TimeSpan>(t, sw.Elapsed));
+            });
+
+            totalTime.Stop();
+
+            var message = string.Format("Invocation of {0} completed in {1:f2} s", typeof(T).FullName, totalTime.Elapsed.TotalSeconds);
+
+            var logAsWarn = details.Any(d => d.Item2 > thresholdForWarning);
+
+            var detailsMessage = new StringBuilder();
+
+            detailsMessage.AppendLine(" - Details:");
+
+            foreach (var detail in details.OrderByDescending(d => d.Item2))
+            {
+                detailsMessage.AppendLine(string.Format("{0} - {1:f4} s", detail.Item1.FullName, detail.Item2.TotalSeconds));
+            }
+
+
+            if (logAsWarn)
+            {
+                Logger.Warn(message + detailsMessage);
+            }
+            else
+            {
+                Logger.Info(message);
+                Logger.Debug(detailsMessage.ToString());
+            }
+        }
+
+
+        static IEnumerable<Assembly> GetAssembliesInDirectoryWithExtension(string path, string extension, Predicate<string> includeAssemblyNames, Predicate<string> excludeAssemblyNames)
         {
             var result = new List<Assembly>();
 
@@ -619,7 +669,7 @@ namespace NServiceBus
             return result;
         }
 
-        private static bool IsIncluded(string assemblyNameOrFileName, Predicate<string> includeAssemblyNames, Predicate<string> excludeAssemblyNames)
+        static bool IsIncluded(string assemblyNameOrFileName, Predicate<string> includeAssemblyNames, Predicate<string> excludeAssemblyNames)
         {
 
             if (includeAssemblyNames != null
@@ -655,7 +705,7 @@ namespace NServiceBus
             return false;
         }
 
-        private static bool IsGenericConfigSource(Type t)
+        static bool IsGenericConfigSource(Type t)
         {
             if (!t.IsGenericType)
                 return false;
@@ -669,7 +719,13 @@ namespace NServiceBus
 
         static string lastProbeDirectory;
         static Configure instance;
-        static ILog Logger = LogManager.GetLogger(typeof(Configure));
+        static ILog Logger
+        {
+            get
+            {
+                return LogManager.GetLogger(typeof(Configure));
+            }
+        }
 
         static readonly IEnumerable<string> defaultAssemblyInclusionOverrides = new[] { "nservicebus." };
 

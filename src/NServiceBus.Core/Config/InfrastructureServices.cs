@@ -82,6 +82,33 @@ namespace NServiceBus.Config
             Logger.DebugFormat("Default provider for infrastructure service {0} has been set to {1}, lifecycle: {2}", serviceType.FullName, providerType.FullName, dependencyLifecycle);
         }
 
+        /// <summary>
+        ///  Register a explict service provider
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="configAction"></param>
+        public static void RegisterServiceFor<T>(Action configAction)
+        {
+            var serviceType = typeof(T);
+
+            SettingsHolder.Set<T>(configAction);
+            Logger.InfoFormat("Explicit provider for infrastructure service {0} has been set to custom action", serviceType.FullName);
+        }
+
+        /// <summary>
+        /// Register a explict service provider
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="providerType"></param>
+        /// <param name="dependencyLifecycle"></param>
+        public static void RegisterServiceFor<T>(Type providerType, DependencyLifecycle dependencyLifecycle)
+        {
+            var serviceType = typeof(T);
+
+            SettingsHolder.Set<T>(() => Configure.Component(providerType, dependencyLifecycle));
+            Logger.InfoFormat("Explicit provider for infrastructure service {0} has been set to {1}, lifecycle: {2}", serviceType.FullName, providerType.FullName, dependencyLifecycle);
+        }
+
 
         /// <summary>
         /// Returns true if the requested service is available and can be enabled on demand
@@ -113,6 +140,8 @@ namespace NServiceBus.Config
             public bool Enabled { get; set; }
 
         }
+
+ 
     }
 
     
@@ -137,7 +166,7 @@ namespace NServiceBus.Config
                 statusText.AppendLine(string.Format("{0} provided by {1} - {2}", serviceStatus.Service.Name, provider, serviceStatus.Enabled ? "Enabled" : "Disabled"));
             }
 
-            Logger.InfoFormat("Infrastructure services: \n{0}",statusText);
+            Logger.DebugFormat("Infrastructure services: \n{0}",statusText);
         }
 
         static readonly ILog Logger = LogManager.GetLogger(typeof(DisplayInfrastructureServicesStatus));

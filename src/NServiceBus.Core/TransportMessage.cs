@@ -4,6 +4,7 @@ using System.Collections.Generic;
 namespace NServiceBus
 {
     using IdGeneration;
+    using Support;
 
     /// <summary>
     /// An envelope used by NServiceBus to package messages for transmission.
@@ -23,7 +24,7 @@ namespace NServiceBus
         {
             Id = CombGuid.Generate().ToString();
             Headers.Add(NServiceBus.Headers.OriginatingEndpoint, Configure.EndpointName);
-            Headers.Add(NServiceBus.Headers.OriginatingMachine, Environment.MachineName);
+            Headers.Add(NServiceBus.Headers.OriginatingMachine, RuntimeEnvironment.MachineName);
             MessageIntent = MessageIntentEnum.Send;
         }
 
@@ -45,6 +46,16 @@ namespace NServiceBus
         }
 
         string id;
+
+        /// <summary>
+        /// Use this method to change the stable ID of the given message.
+        /// </summary>
+        /// <param name="newId"></param>
+        public void ChangeMessageId(string newId)
+        {
+            id = newId;
+            Headers[NServiceBus.Headers.IdForCorrelation] = newId;
+        }
 
         /// <summary>
         /// Gets/sets the identifier that is copied to <see cref="CorrelationId"/>.

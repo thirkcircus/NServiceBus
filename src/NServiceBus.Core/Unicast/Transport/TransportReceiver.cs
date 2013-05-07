@@ -6,8 +6,8 @@ namespace NServiceBus.Unicast.Transport
     using Faults;
     using Logging;
     using System.Runtime.Serialization;
-    using Management.Retries;
     using Monitoring;
+    using SecondLevelRetries;
     using Transports;
 
     /// <summary>
@@ -179,7 +179,17 @@ namespace NServiceBus.Unicast.Transport
 
             receiveAddress = address;
 
-            FailureManager.Init(address);
+            var returnAddressForFailures = address;
+
+            if (Configure.Instance.WorkerRunsOnThisEndpoint() 
+                && (returnAddressForFailures.Queue.ToLower().EndsWith(".worker")|| address ==Address.Local )) //this is a hack until we can refactor the SLR to be a feature. "Worker" is there to catch the local worker in the distributor
+            {
+                returnAddressForFailures = Configure.Instance.GetMasterNodeAddress();
+
+                Logger.InfoFormat("Worker started, failures will be redirected to {0}",returnAddressForFailures);
+            }
+
+            FailureManager.Init(returnAddressForFailures);
 
             firstLevelRetries = new FirstLevelRetries(TransactionSettings.MaxRetries, FailureManager);
 
@@ -280,30 +290,22 @@ namespace NServiceBus.Unicast.Transport
             Logger.Info("Failed to process message", ex);
         }
 
-        void ProcessMessage(TransportMessage m)
+        void ProcessMessage(TransportMessage message)
         {
-            if (string.IsNullOrWhiteSpace(m.Id))
+            if (string.IsNullOrWhiteSpace(message.Id))
             {
                 Logger.Error("Message without message id detected");
-                FailureManager.SerializationFailedForMessage(m, new SerializationException("Message without message id received."));
+                FailureManager.SerializationFailedForMessage(message, new SerializationException("Message without message id received."));
                 return;
             }
 
-            var exceptionFromStartedMessageHandling = OnStartedMessageProcessing(m);
+            var exceptionFromStartedMessageHandling = OnStartedMessageProcessing(message);
 
             if (TransactionSettings.IsTransactional)
             {
-                if (firstLevelRetries.HasMaxRetriesForMessageBeenReached(m))
+                if (firstLevelRetries.HasMaxRetriesForMessageBeenReached(message))
                 {
-                    //HACK: We need this hack here till we refactor the SLR to be a first class concept in the TransportReceiver
-                    if (Configure.Instance.Builder.Build<SecondLevelRetries>().Disabled)
-                    {
-                        Logger.ErrorFormat("Message has failed the maximum number of times allowed, ID={0}.", m.IdForCorrelation);
-                    }
-                    else
-                    {
-                        Logger.WarnFormat("Message has failed the maximum number of times allowed, message will be handed over to SLR, ID={0}.", m.IdForCorrelation);
-                    }
+                  
 
                     OnFinishedMessageProcessing();
 
@@ -315,7 +317,7 @@ namespace NServiceBus.Unicast.Transport
                 throw exceptionFromStartedMessageHandling; //cause rollback 
 
             //care about failures here
-            var exceptionFromMessageHandling = OnTransportMessageReceived(m);
+            var exceptionFromMessageHandling = OnTransportMessageReceived(message);
 
             //and here
             var exceptionFromMessageModules = OnFinishedMessageProcessing();
@@ -334,8 +336,8 @@ namespace NServiceBus.Unicast.Transport
                     var serializationException = exceptionFromMessageHandling.GetBaseException() as  SerializationException;
                     if (serializationException != null)
                     {
-                        Logger.Error("Failed to serialize message with ID: " + m.IdForCorrelation, serializationException);
-                        FailureManager.SerializationFailedForMessage(m, serializationException);
+                        Logger.Error("Failed to serialize message with ID: " + message.IdForCorrelation, serializationException);
+                        FailureManager.SerializationFailedForMessage(message, serializationException);
                     }
                     else
                     {
@@ -353,6 +355,8 @@ namespace NServiceBus.Unicast.Transport
                 throw exceptionFromMessageModules;
             }
         }
+
+      
 
         /// <summary>
         /// Causes the processing of the current message to be aborted.
@@ -453,6 +457,11 @@ namespace NServiceBus.Unicast.Transport
             if (disposing)
             {
                 Stop();
+
+                if (currentReceivePerformanceDiagnostics != null)
+                {
+                    currentReceivePerformanceDiagnostics.Dispose();
+                }
             }
 
             disposed = true;

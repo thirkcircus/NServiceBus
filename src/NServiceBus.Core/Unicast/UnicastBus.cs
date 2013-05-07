@@ -28,6 +28,7 @@ namespace NServiceBus.Unicast
     using Settings;
     using Subscriptions;
     using Subscriptions.MessageDrivenSubscriptions.SubcriberSideFiltering;
+    using Support;
     using Transport;
     using Transports;
     using UnitOfWork;
@@ -46,18 +47,6 @@ namespace NServiceBus.Unicast
             _doNotContinueDispatchingCurrentMessageToHandlers = false;
             _handleCurrentMessageLaterWasCalled = false;
             _messageBeingHandled = null;
-        }
-
-        /// <summary>
-        /// When set, when starting up, the bus performs 
-        /// a subscribe operation for message types for which it has
-        /// handlers and that are owned by a different endpoint.
-        /// Default is true.
-        /// </summary>
-        public bool AutoSubscribe
-        {
-            get { return autoSubscribe; }
-            set { autoSubscribe = value; }
         }
 
 
@@ -301,6 +290,9 @@ namespace NServiceBus.Unicast
 
             MapTransportMessageFor(messages as object[], eventMessage);
 
+            if(MessagePublisher == null)
+                throw new InvalidOperationException("No message publisher has been registered. If you're using a transport without native support for pub/sub please enable the message driven publishing feature by calling: Feature.Enable<MessageDrivenPublisher>() in your configuration");
+
             var subscribersExisted = MessagePublisher.Publish(eventMessage, fullTypes);
 
             if (!subscribersExisted && NoSubscribersForMessage != null)
@@ -359,12 +351,16 @@ namespace NServiceBus.Unicast
 
             if (Configure.SendOnlyMode)
                 throw new InvalidOperationException("It's not allowed for a sendonly endpoint to be a subscriber");
-     
+
             AssertHasLocalAddress();
-           
+
             var destination = GetAddressForMessageType(messageType);
             if (Address.Self == destination)
                 throw new InvalidOperationException(string.Format("Message {0} is owned by the same endpoint that you're trying to subscribe", messageType));
+
+
+            if (SubscriptionManager == null)
+                throw new InvalidOperationException("No subscription manager is available");
 
             SubscriptionManager.Subscribe(messageType, destination);
 
@@ -391,10 +387,13 @@ namespace NServiceBus.Unicast
 
             if (Configure.SendOnlyMode)
                 throw new InvalidOperationException("It's not allowed for a sendonly endpoint to unsubscribe");
-            
+
             AssertHasLocalAddress();
-            
+
             var destination = GetAddressForMessageType(messageType);
+
+            if (SubscriptionManager == null)
+                throw new InvalidOperationException("No subscription manager is available");
 
             SubscriptionManager.Unsubscribe(messageType, destination);
         }
@@ -713,7 +712,7 @@ namespace NServiceBus.Unicast
 
         public IBus Start()
         {
-            return Start(() => {});
+            return Start(() => { });
         }
 
         public IBus Start(Action startupAction)
@@ -743,11 +742,6 @@ namespace NServiceBus.Unicast
                 if (!DoNotStartTransport)
                 {
                     transport.Start(InputAddress);
-                }
-
-                if (autoSubscribe)
-                {
-                    PerformAutoSubscribe();
                 }
 
                 started = true;
@@ -793,7 +787,7 @@ namespace NServiceBus.Unicast
             var tasks = thingsToRunAtStartup.Select(toRun =>
                 {
                     var name = toRun.GetType().AssemblyQualifiedName;
-                    
+
                     var task = new Task(() =>
                         {
                             try
@@ -855,29 +849,6 @@ namespace NServiceBus.Unicast
             }
             set { inputAddress = value; }
         }
-
-
-        void PerformAutoSubscribe()
-        {
-            if(AutoSubscriptionStrategy == null)
-                return;
-
-            AssertHasLocalAddress();
-
-            foreach (var eventType in AutoSubscriptionStrategy.GetEventsToSubscribe()
-                .Where(t => !MessageConventionExtensions.IsInSystemConventionList(t))) //never autosubscribe system messages
-            {
-                Subscribe(eventType);
-
-                Log.DebugFormat("Autosubscribed to event {0}",eventType);
-            }
-        }
-
-        /// <summary>
-        /// The strategy to use when determining which events to automatically subscribe to
-        /// </summary>
-        public IAutoSubscriptionStrategy AutoSubscriptionStrategy { get; set; }
-
 
         void AssertHasLocalAddress()
         {
@@ -1023,7 +994,7 @@ namespace NServiceBus.Unicast
                 return;
             }
 
-            HandleCorrelatedMessage(m, messages);
+            var callbackInvoked = HandleCorrelatedMessage(m, messages);
 
             foreach (var messageToHandle in messages)
             {
@@ -1031,7 +1002,7 @@ namespace NServiceBus.Unicast
 
                 var handlers = DispatchMessageToHandlersBasedOnType(builder, messageToHandle).ToList();
 
-                if (!handlers.Any())
+                if (!callbackInvoked && !handlers.Any())
                 {
                     var warning = string.Format("No handlers could be found for message type: {0}", messageToHandle);
 
@@ -1073,7 +1044,7 @@ namespace NServiceBus.Unicast
             {
 
                 var messageMetadata = MessageRegistry.GetMessageTypes(m);
-               
+
 
                 using (var stream = new MemoryStream(m.Body))
                 {
@@ -1113,7 +1084,7 @@ namespace NServiceBus.Unicast
 
                 dispatchers.ForEach(dispatch =>
                     {
-                        Log.DebugFormat("Dispatching message {0} to handler{1}", messageType, handlerTypeToInvoke);
+                        Log.DebugFormat("Dispatching message '{0}' to handler '{1}'", messageType, handlerTypeToInvoke);
                         try
                         {
                             dispatch();
@@ -1166,14 +1137,14 @@ namespace NServiceBus.Unicast
 
         /// <summary>
         /// If the message contains a correlationId, attempts to
-        /// invoke callbacks for that Id.
+        /// invoke callbacks for that Id. Returns true if a callback was invoked
         /// </summary>
         /// <param name="msg">The message to evaluate.</param>
         /// <param name="messages">The logical messages in the transport message.</param>
-        void HandleCorrelatedMessage(TransportMessage msg, object[] messages)
+        bool HandleCorrelatedMessage(TransportMessage msg, object[] messages)
         {
             if (msg.CorrelationId == null)
-                return;
+                return false;
 
             BusAsyncResult busAsyncResult;
 
@@ -1184,7 +1155,7 @@ namespace NServiceBus.Unicast
             }
 
             if (busAsyncResult == null)
-                return;
+                return false;
 
             var statusCode = int.MinValue;
 
@@ -1192,6 +1163,8 @@ namespace NServiceBus.Unicast
                 statusCode = int.Parse(msg.Headers[Headers.ReturnMessageErrorCodeHeader]);
 
             busAsyncResult.Complete(statusCode, messages);
+
+            return true;
         }
 
         /// <summary>
@@ -1279,10 +1252,10 @@ namespace NServiceBus.Unicast
         {
             if (!ConfigureImpersonation.Impersonate)
                 return;
-            var impersonator = childBuilder.Build<IImpersonateClients>();
+            var impersonator = childBuilder.Build<ExtractIncomingPrincipal>();
 
             if (impersonator == null)
-                throw new InvalidOperationException("Impersonation is configured for this endpoint but no implementation of IImpersonateClients found. Please register one");
+                throw new InvalidOperationException("Run handler under incoming principal is configured for this endpoint but no implementation of ExtractIncomingPrincipal has been found. Please register one.");
 
             var principal = impersonator.GetPrincipal(message);
 
@@ -1320,6 +1293,8 @@ namespace NServiceBus.Unicast
         {
             _messageBeingHandled = e.Message;
 
+            AddProcessingInformationHeaders(_messageBeingHandled);
+
             modules = Builder.BuildAll<IMessageModule>().ToList();
 
             modules.ForEach(module =>
@@ -1330,6 +1305,13 @@ namespace NServiceBus.Unicast
 
             modules.Reverse();//make sure that the modules are called in reverse order when processing ends
         }
+
+        void AddProcessingInformationHeaders(TransportMessage message)
+        {
+            message.Headers[Headers.ProcessingEndpoint] = Configure.EndpointName;
+            message.Headers[Headers.ProcessingMachine] = RuntimeEnvironment.MachineName;
+        }
+
 
         /// <summary>
         /// Sends the Msg to the address found in the field <see cref="ForwardReceivedMessagesTo"/>

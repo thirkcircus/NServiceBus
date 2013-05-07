@@ -72,7 +72,7 @@ namespace NServiceBus.AcceptanceTesting.Support
             }
             catch (OperationCanceledException)
             {
-                Console.Out.WriteLine("Testrun aborted due to test failures");
+                Console.Out.WriteLine("Test run aborted due to test failures");
             }
 
             var failedRuns = results.Where(s => s.Result.Failed).ToList();
@@ -122,10 +122,19 @@ namespace NServiceBus.AcceptanceTesting.Support
 
 
             if (runResult.Failed)
+            {
                 Console.Out.WriteLine("Test failed: {0}", runResult.Exception);
+
+                Console.Out.WriteLine("Context:");
+
+                foreach (var prop in runResult.ScenarioContext.GetType().GetProperties())
+                {
+                    Console.Out.WriteLine("{0} = {1}", prop.Name, prop.GetValue(runResult.ScenarioContext,null));    
+                }
+            }
             else
             {
-                Console.Out.WriteLine("Result: Successfull - Duration: {0}", runResult.TotalTime);
+                Console.Out.WriteLine("Result: Successful - Duration: {0}", runResult.TotalTime);
                 Console.Out.WriteLine("------------------------------------------------------");
 
             }
@@ -133,7 +142,10 @@ namespace NServiceBus.AcceptanceTesting.Support
 
         static RunResult PerformTestRun(IList<EndpointBehaviour> behaviorDescriptors, IList<IScenarioVerification> shoulds, RunDescriptor runDescriptor, Func<ScenarioContext, bool> done)
         {
-            var runResult = new RunResult();
+            var runResult = new RunResult
+                {
+                    ScenarioContext = runDescriptor.ScenarioContext
+                };
 
             var runTimer = new Stopwatch();
 
@@ -293,6 +305,8 @@ namespace NServiceBus.AcceptanceTesting.Support
                 var endpointName = GetEndpointNameForRun(runDescriptor, behaviorDescriptor);
 
 
+
+
                 var runner = PrepareRunner(endpointName, behaviorDescriptor);
                 var result = runner.Instance.Initialize(runDescriptor, behaviorDescriptor, routingTable, endpointName);
 
@@ -352,6 +366,9 @@ namespace NServiceBus.AcceptanceTesting.Support
         public Exception Exception { get; set; }
 
         public TimeSpan TotalTime { get; set; }
+
+        public ScenarioContext ScenarioContext{ get; set; }
+
 
         public IEnumerable<string> ActiveEndpoints
         {

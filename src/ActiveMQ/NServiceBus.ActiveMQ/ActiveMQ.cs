@@ -1,10 +1,13 @@
 ﻿namespace NServiceBus
 {
     using Transports;
-    using Unicast.Transport;
 
-    public class ActiveMQ : ITransportDefinition
+    public class ActiveMQ : TransportDefinition
     {
-
+        public ActiveMQ()
+        {
+            HasNativePubSubSupport = true;
+            HasSupportForCentralizedPubSub = true;
+        }
     }
 }

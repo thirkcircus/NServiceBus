@@ -11,16 +11,11 @@
             {
                 var feature = (IFeature)Activator.CreateInstance(t);
 
-                if (feature is IConditionalFeature && ((IConditionalFeature)feature).EnabledByDefault())
+                if (feature is IConditionalFeature)
                 {
-                    Feature.Enable(t);
-                    Logger.DebugFormat("Feature {0} has requested to be enabled by default",t.Name);
-                    return;
+                    Feature.EnableByDefault(t);
+                    Logger.DebugFormat("Feature {0} is conditional and will be enabled by default", t.FeatureName());
                 }
-
-                Feature.Disable(t);
-                Logger.DebugFormat("Feature {0} is disabled by default",t.Name);
-    
             });
         }
 
