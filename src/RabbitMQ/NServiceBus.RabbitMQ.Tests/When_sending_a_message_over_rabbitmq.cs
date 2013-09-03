@@ -144,14 +144,44 @@
 
 
 
-        [Test, Ignore("Not sure we should enforce this")]
+        [Test]
+        //[Ignore("Not sure we should enforce this")]
         public void Should_throw_when_sending_to_a_nonexisting_queue()
         {
+            MakeSureQueueExists("NonExistingQueue");
+            using (var channel = connectionManager.GetConnection(ConnectionPurpose.Administration).CreateModel())
+            {
+                // ensure the queue is created by the routing topology so it thinks the queue has been set up
+                sender.RoutingTopology.CreateQueueAndExchangeForSubscriber(channel, "NonExistingQueue");
+                // manually delete the queue without telling the routing topology
+                channel.QueueDelete("NonExistingQueue");
+
             Assert.Throws<QueueNotFoundException>(() =>
                  sender.Send(new TransportMessage
                  {
 
                  }, Address.Parse("NonExistingQueue@localhost")));
+            }
+        }
+
+        [Test]
+        //[Ignore("Not sure we should enforce this")]
+        public void Should_throw_when_sending_to_a_nonexisting_exchange()
+        {
+            MakeSureQueueExists("NonExistingQueue");
+            using (var channel = connectionManager.GetConnection(ConnectionPurpose.Administration).CreateModel())
+            {
+                // ensure the queue is created by the routing topology so it thinks the queue has been set up
+                sender.RoutingTopology.CreateQueueAndExchangeForSubscriber(channel, "NonExistingQueue");
+                // manually delete the queue without telling the routing topology
+                channel.ExchangeDelete("NonExistingQueue");
+
+            Assert.Throws<QueueNotFoundException>(() =>
+                 sender.Send(new TransportMessage
+                 {
+
+                 }, Address.Parse("NonExistingQueue@localhost")));
+            }
         }
 
         void Verify(TransportMessageBuilder builder, Action<TransportMessage, BasicDeliverEventArgs> assertion)

@@ -35,7 +35,7 @@
             channel.ExchangeBind(subscriberName, ExchangeName(type), string.Empty);
         }
 
-        void CreateQueueAndExchangeForSubscriber(IModel channel, string subscriberName)
+        public void CreateQueueAndExchangeForSubscriber(IModel channel, string subscriberName)
         {
             if (endpointSubscriptionConfiguredSet.ContainsKey(subscriberName))
             {

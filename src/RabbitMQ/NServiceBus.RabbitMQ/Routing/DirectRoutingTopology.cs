@@ -33,6 +33,10 @@
             channel.BasicPublish(string.Empty, address.Queue, true, false, properties, message.Body);
         }
 
+        public void CreateQueueAndExchangeForSubscriber(IModel channel, string subscriberName) {
+            throw new NotImplementedException();
+        }
+
         string ExchangeName()
         {
             return ExchangeNameConvention(null,null);

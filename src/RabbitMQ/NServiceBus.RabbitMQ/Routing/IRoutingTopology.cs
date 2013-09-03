@@ -38,5 +38,7 @@
         /// <param name="message"></param>
         /// <param name="properties"></param>
         void Send(IModel channel, Address address, TransportMessage message, IBasicProperties properties);
+
+        void CreateQueueAndExchangeForSubscriber(IModel channel, string subscriberName);
     }
 }
